@@ -129,29 +129,18 @@
 </header>
 <div class="lead">
   利用者の情報を入力し、<b>「計画を自動作成」</b>を押すと、長期・短期目標や訓練プログラムの下書きが作られます。内容を確認・修正したうえで、<b>「Wordで出力」</b>から計画書をダウンロードできます。
-  <div id="timerBox" style="display:none;margin-top:10px;background:var(--teal-light);border:1px solid var(--teal);border-radius:10px;padding:8px 14px;font-size:.88rem;color:var(--teal-dark);display:inline-flex;align-items:center;gap:10px;"><span>⏱</span><span id="timerLabel">入力時間：計測中…</span></div>
 </div>
 
 <div class="wrap">
 
-  <!-- STEP 0 書類から一括読み込み -->
-  <section class="card">
-    <div class="head"><span class="num">0</span><h2>書類から一括読み込み（任意）</h2></div>
-    <div class="body">
-      <p style="margin:0 0 10px;color:var(--muted);font-size:.88rem;">
-        ケアプラン・フェイスシート・アセスメント表など<b>手元の書類のテキストをコピーして貼り付ける</b>と、氏名・要介護度・病名・本人の希望などを自動で各入力欄に振り分けます。読み込み後も手入力で修正できます。
-      </p>
-      <div class="field">
-        <label>テキストを貼り付け<span class="hint">Ctrl+V（Macは⌘+V）で貼り付けてください。書類の形式は問いません。</span></label>
-        <textarea id="bulkPaste" style="min-height:100px;" placeholder="例）&#10;氏名：佐藤 太郎　性別：男性&#10;要介護度：要介護2&#10;病名：変形性膝関節症&#10;本人の希望：また畑仕事がしたい&#10;家族の希望：転ばないでほしい"></textarea>
-      </div>
-      <div class="actions" style="margin-top:10px;">
-        <button class="btn btn-primary" id="parseBtn">各入力欄に読み込む</button>
-        <button class="btn btn-ghost" id="clearPasteBtn">貼り付け欄をクリア</button>
-      </div>
-      <div id="parseStatus" style="font-size:.84rem;color:var(--teal-dark);margin-top:8px;"></div>
-    </div>
-  </section>
+  <!-- Gemini APIキー設定（任意） -->
+  <div id="apiSetup" style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:#fff;border-radius:14px;padding:14px 20px;margin-bottom:18px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+    <span style="font-weight:700;font-size:.95rem;">🤖 AI強化モード（任意）</span>
+    <span style="font-size:.82rem;opacity:.9;flex-basis:100%;">Google Gemini APIキーを設定すると、テンプレートより個別化された計画が生成されます。氏名・生年月日は送信しません。</span>
+    <input type="password" id="geminiKey" placeholder="Google Gemini APIキーを貼り付け" style="flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:none;font-size:.9rem;color:#333;">
+    <button id="setKeyBtn" style="background:#fff;color:#1a73e8;font-weight:700;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;font-size:.9rem;">設定</button>
+    <span id="keyStatus" style="font-size:.84rem;"></span>
+  </div>
 
 
   <!-- STEP 1 基本情報 -->
@@ -371,61 +360,6 @@ const FIELDS = ["office","author","name","sex","birth","care","cdate","fdate","a
   "wish_self","wish_family","social","home","disease","comorbid","course","caution","gait","provider","extra"];
 // 自動保存は実行環境に依存しエラーの原因となり得るため使用しない。
 
-/* ====== 入力時間計測 ====== */
-var startTime=null,inputTimer=null;
-function startTimer(){
-  if(startTime)return;
-  startTime=Date.now();
-  var box=$("timerBox");if(box)box.style.display="inline-flex";
-  inputTimer=setInterval(function(){
-    var sec=Math.floor((Date.now()-startTime)/1000),m=Math.floor(sec/60),s=sec%60;
-    var lbl=$("timerLabel");if(lbl)lbl.textContent="入力時間："+(m>0?m+"分"+String(s).padStart(2,"0")+"秒":s+"秒");
-  },1000);
-}
-function stopTimer(){
-  if(inputTimer){clearInterval(inputTimer);inputTimer=null;}
-  if(!startTime)return"未計測";
-  var sec=Math.floor((Date.now()-startTime)/1000),m=Math.floor(sec/60),s=sec%60;
-  return m>0?m+"分"+String(s).padStart(2,"0")+"秒":s+"秒";
-}
-function resetTimer(){
-  startTime=null;if(inputTimer){clearInterval(inputTimer);inputTimer=null;}
-  var box=$("timerBox"),lbl=$("timerLabel");
-  if(box)box.style.display="none";if(lbl)lbl.textContent="入力時間：計測中…";
-}
-document.addEventListener("input",function(e){if(e.target.id!=="bulkPaste")startTimer();});
-document.addEventListener("change",function(){startTimer();});
-
-/* ====== 一括貼り付け解析 ====== */
-var CARE_OPTS=["要支援1","要支援2","要介護1","要介護2","要介護3","要介護4","要介護5"];
-var GAIT_MAP={"自立（杖なし）":["自立","独歩"],"杖歩行":["杖"],"歩行器":["歩行器"],"見守り歩行":["見守り"],"介助歩行":["介助歩行","歩行介助"],"車いす（自走）":["車いす","車椅子"]};
-var ADL_KW={"歩行":["歩行困難","歩けない"],"立ち上がり":["立ち上がり"],"階段昇降":["階段","段差"],"入浴":["入浴","お風呂"],"トイレ動作":["トイレ","排泄"],"着替え":["着替え","更衣"],"食事":["食事困難","摂食"],"整容":["整容","洗顔"],"移乗":["移乗"],"屋外への外出":["外出困難"],"家事（調理・掃除）":["家事","調理","掃除"],"買い物":["買い物"]};
-function parseBulk(){
-  var raw=($("bulkPaste")||{}).value||"";raw=raw.trim();
-  if(!raw){var ps=$("parseStatus");if(ps)ps.textContent="テキストが入力されていません。";return;}
-  var hit=0;
-  function setVal(id,val){var el=$(id);if(el&&val){el.value=val;hit++;}}
-  function m(pat){return raw.match(pat);}
-  var nM=m(/(?:氏名|利用者名?)[：:]\s*([^\n　,、。：:\d]{2,12})/);if(nM)setVal("name",nM[1].trim().replace(/\s+$/,""));
-  if(/女性|（女）/.test(raw))setVal("sex","女");else if(/男性|（男）/.test(raw))setVal("sex","男");
-  var bM=m(/生年月日?[：:]\s*((?:明治|大正|昭和|平成|令和)\d+年\d+月\d+日)/);if(bM)setVal("birth",bM[1]);
-  for(var ci=0;ci<CARE_OPTS.length;ci++){if(raw.includes(CARE_OPTS[ci])){setVal("care",CARE_OPTS[ci]);break;}}
-  var dM=m(/(?:疾患名?|病名|主要因|傷病名)[：:]\s*([^\n。,、]{2,40})/);if(dM)setVal("disease",dM[1].trim());
-  var cM=m(/(?:合併症?|既往歴?)[：:]\s*([^\n。,、]{2,40})/);if(cM)setVal("comorbid",cM[1].trim());
-  var wM=m(/(?:本人.{0,4}希望|本人.{0,4}意向|ご本人.{0,4}希望)[：:]\s*([^\n]{4,80})/);if(wM)setVal("wish_self",wM[1].trim());
-  var wfM=m(/(?:家族.{0,4}希望|家族.{0,4}意向)[：:]\s*([^\n]{4,80})/);if(wfM)setVal("wish_family",wfM[1].trim());
-  var sM=m(/(?:社会参加|参加状況|役割)[：:]\s*([^\n]{4,80})/);if(sM)setVal("social",sM[1].trim());
-  var hM=m(/(?:居宅|住居|住環境)[：:]\s*([^\n]{4,80})/);if(hM)setVal("home",hM[1].trim());
-  var crM=m(/(?:治療経過|経過)[：:]\s*([^\n]{4,100})/);if(crM)setVal("course",crM[1].trim());
-  var caM=m(/(?:留意事項|注意事項|禁忌)[：:]\s*([^\n]{4,80})/);if(caM)setVal("caution",caM[1].trim());
-  for(var gk in GAIT_MAP){if(GAIT_MAP[gk].some(function(k){return raw.includes(k);})){setVal("gait",gk);break;}}
-  for(var ak in ADL_KW){if(ADL_KW[ak].some(function(k){return raw.includes(k);})){var cb=document.querySelector("#adlChecks label.chip input[value='"+ak+"']");if(cb&&!cb.checked){cb.checked=true;cb.parentElement.classList.add("on");hit++;}}}
-  var ps=$("parseStatus");
-  if(ps)ps.textContent=hit>0?"✅ "+hit+"項目を読み込みました。認識できなかった項目は手入力で補ってください。":"❌ キーワードが見つかりませんでした。「氏名：」「病名：」のようにラベルの後にコロンを付けると認識しやすくなります。";
-  if(hit>0)startTimer();
-}
-
-
 
 /* ====== AI生成 ====== */
 let lastData = null;
@@ -499,112 +433,102 @@ const PLAN_DB = [
  pg:[{c:"立位の安定のため、平行棒内での起立・着座訓練を行う",n:"膝に過度な負荷をかけない。疼痛時は中止",fr:"週2回",t:"15"},
      {c:"歩行の安定のため、段差・不整地を想定した応用歩行訓練を行う",n:"ふらつき時はすぐ支える。血圧変動に注意",fr:"週2回",t:"20"},
      {c:"日常動作の自立のため、しゃがみ・立ち上がり動作の反復訓練を行う",n:"膝の痛みが出たら中止",fr:"週1回",t:"10"}],
- hm:"椅子からの立ち座りを1日2回各10回行ってください。手すりや安定した台を使うと安全です。",
+ hm:"椅子からの立ち座りを1日2回各10回。手すりや安定した台を使用。",
  mo:"連続歩行距離（m）\n膝関節の疼痛の有無と程度\n段差昇降の可否と安定性\nトイレ動作・入浴動作の自立度",
- fs:"変形性膝関節症による膝の痛みと筋力低下で、歩行や立ち座りに不安が生じている",
- cmn:"【変形性膝関節症】膝関節の機能低下（心身機能）が歩行・段差昇降の制限（活動制約）につながり、外出・社会参加の機会が減少しています（参加制約）。"},
+ ai:"膝関節の機能改善を、歩行・段差昇降という日常の活動へつなげ、WISH_ACTという参加の実現を段階的に目指す計画。"},
 {id:"femur",kw:["大腿骨","骨頭","転子"],
  lt:{f:"股関節周囲筋力と荷重バランスを高め、骨折部の安定性を確保する",a:"杖歩行で屋内外を安全に移動でき、外出が可能になる",p:"WISH"},
  st:{f:"患側下肢の荷重力を高め、立位保持を安定させる",a:"見守りで屋内歩行が自立する",p:"WISH_SHORT"},
  pg:[{c:"荷重力の向上のため、平行棒内での荷重移動訓練を行う",n:"脱臼肢位を避ける（過度な内転・内旋・屈曲）",fr:"週2回",t:"15"},
      {c:"歩行の安定のため、歩行器・杖を用いた歩行訓練を行う",n:"転倒に注意。痛みが強い日は負荷を軽減",fr:"週2回",t:"20"},
      {c:"生活動作の回復のため、椅子座位での上肢・体幹の体操を行う",n:"座位バランスに注意",fr:"毎回",t:"10"}],
- hm:"椅子に座っての足踏み運動を1日2回各20回行ってください。転倒に注意し、必ず安定した椅子で行ってください。",
- mo:"連続歩行距離（m）と使用している歩行補助具の種類\n患側の荷重時痛の有無\n移乗動作の自立度\n外出回数（週あたり）",
- fs:"大腿骨骨折の手術後、体重をかけることや歩行に慎重さが必要な",
- cmn:"【大腿骨骨折術後】術後の筋力・荷重力の低下（心身機能）が歩行・日常動作の制限（活動制約）につながり、自宅内外での生活役割の縮小（参加制約）を招いています。"},
+ hm:"椅子に座っての足踏み運動を1日2回各20回。転倒に注意し安定した椅子で行う。",
+ mo:"連続歩行距離（m）と杖の種類\n患側の荷重時痛の有無\n移乗動作の自立度\n外出回数（週あたり）",
+ ai:"骨折後の下肢荷重力の回復を、歩行・外出という活動と社会参加につなげるICFの視点で段階的に設定した。"},
 {id:"stroke",kw:["脳梗塞","脳出血","片麻痺","半身","脳卒中"],
  lt:{f:"麻痺側の筋力と協調性を高め、非麻痺側の代償能力を維持する",a:"装具・杖を用いて安全に移動でき、日常生活動作の自立度を高める",p:"WISH"},
  st:{f:"麻痺側上下肢の随意運動を促し、座位・立位バランスを向上させる",a:"移乗動作を見守りで行える",p:"WISH_SHORT"},
  pg:[{c:"立位バランスの向上のため、平行棒内での重心移動訓練を行う",n:"麻痺側を保護。血圧変動に注意",fr:"週2回",t:"15"},
      {c:"歩行能力の維持・向上のため、装具・杖を用いた歩行訓練を行う",n:"ふらつき・つまずきに注意。段差は職員が付き添う",fr:"週2回",t:"20"},
      {c:"上肢機能の改善のため、麻痺側を含む両手動作の訓練を行う",n:"肩の痛みに注意。無理な可動域訓練は避ける",fr:"週1回",t:"15"}],
- hm:"健側の手すり把持で立ち座りを1日10回行ってください。麻痺側の指の開閉運動を50回、継続してください。",
+ hm:"健側での手すり把持で立ち座りを1日10回。麻痺側の指の開閉運動を50回。",
  mo:"歩行距離と歩行速度の変化\n麻痺側の握力・関節可動域\n移乗・トイレ動作の自立度\n1週間の活動量・外出回数",
- fs:"脳卒中の影響で体に麻痺が残り、移動や日常動作に介助や見守りが必要な",
- cmn:"【脳卒中後遺症】麻痺・バランス障害（心身機能）が移動・ADLの制限（活動制約）につながり、社会参加の大幅な縮小（参加制約）を招いています。"},
+ ai:"脳卒中後の心身機能の回復を、移動・日常動作という活動へつなげ、本人の希望する社会参加を段階的に実現する計画。"},
 {id:"parkinson",kw:["パーキンソン","すくみ足","振戦"],
  lt:{f:"体幹の柔軟性と姿勢制御を維持し、すくみ足・突進歩行を軽減する",a:"転倒なく屋内移動ができ、日常動作を安全に行える",p:"WISH"},
  st:{f:"姿勢反射を促し、方向転換時のバランスを改善する",a:"見守りで屋内移動が安定する",p:"WISH_SHORT"},
  pg:[{c:"姿勢の維持のため、座位・立位での体幹回旋ストレッチを行う",n:"オン・オフの変動に配慮。オフ時は無理をさせない",fr:"毎回",t:"10"},
      {c:"歩行の安定のため、リズムに合わせた歩行訓練（外的キュー）を行う",n:"すくみ足が出たら一度止まり再スタート",fr:"週2回",t:"20"},
      {c:"転倒予防のため、バランスボードを用いた重心移動訓練を行う",n:"転倒リスク高い。常に手が届く位置で見守り",fr:"週1回",t:"15"}],
- hm:"大きな声での発声練習を毎日5分行ってください。椅子座位での足踏みを朝夕各20回、続けてください。",
+ hm:"大きな声での発声練習を毎日5分。椅子座位での足踏みを朝夕各20回。",
  mo:"すくみ足の頻度と持続時間\n転倒回数（月あたり）\n方向転換時の安定性\n日常動作（着替え・食事）の所要時間",
- fs:"パーキンソン病の影響で体の動きが緩慢になり、すくみ足や転倒のリスクが高い",
- cmn:"【パーキンソン病】姿勢反射障害・すくみ足（心身機能）が移動の不安定化と転倒リスクの上昇（活動制約）につながり、屋外活動・外出の大幅な減少（参加制約）を招いています。"},
+ ai:"パーキンソン病の進行に伴う動作障害に対し、転倒予防と生活動作の維持を中心に、参加への意欲を支える計画。"},
 {id:"dementia",kw:["認知症","アルツハイマー","レビー","前頭側頭","見当識"],
  lt:{f:"残存する身体機能を維持し、活動性の低下を防ぐ",a:"声かけや見守りで日常動作を継続できる",p:"WISH"},
  st:{f:"定期的な運動で筋力・持久力の低下を予防する",a:"促しにより食事・整容を自分で行える",p:"WISH_SHORT"},
  pg:[{c:"活動性の維持のため、なじみの音楽に合わせた集団体操を行う",n:"指示理解に配慮。簡単な動作を繰り返す形式で",fr:"毎回",t:"15"},
      {c:"下肢筋力の維持のため、椅子からの立ち座り訓練を行う",n:"転倒に注意。声かけで安心感を与える",fr:"週2回",t:"10"},
      {c:"社会性の維持のため、手工芸や園芸など興味のある活動を取り入れる",n:"成功体験を重視。失敗を指摘しない",fr:"週1回",t:"20"}],
- hm:"ご家族と一緒に散歩を1日10〜15分行ってください。簡単な家事（食器拭き等）への参加も、本人のペースで促してください。",
- mo:"日常動作（食事・整容・排泄）の自立度の変化\n行動・心理症状（BPSD）の頻度や種類\n活動への参加意欲・表情の明るさ\n歩行の安定性",
- fs:"認知症の影響で日々の行動に見守りや声かけが必要となり、活動の範囲が狭まっている",
- cmn:"【認知症】認知機能低下（心身機能）が日常生活動作の低下（活動制約）につながり、社会的役割・生活の楽しみの縮小（参加制約）を招いています。"},
+ hm:"家族と一緒に散歩を1日10〜15分。簡単な家事（食器拭き等）への参加を促す。",
+ mo:"日常動作（食事・整容・排泄）の自立度\n行動・心理症状（BPSD）の変化\n活動への参加意欲・表情\n歩行の安定性",
+ ai:"認知症の進行に伴う活動性低下を防ぎ、残存機能を活かした日常動作と社会参加を維持する計画。"},
 {id:"disuse",kw:["廃用","フレイル","サルコペニア","不活発","低栄養","活動量低下"],
  lt:{f:"全身の筋力・持久力を回復し、活動量を増やす",a:"屋内の移動と基本的な日常動作が自立する",p:"WISH"},
  st:{f:"起居動作と立位保持の安定性を高める",a:"見守りで歩行・トイレ動作が行える",p:"WISH_SHORT"},
  pg:[{c:"筋力回復のため、椅子座位での下肢の筋力トレーニングを行う",n:"疲労に注意。少量から段階的に負荷を上げる",fr:"週2回",t:"15"},
      {c:"持久力の向上のため、歩行距離を段階的に延長する訓練を行う",n:"息切れ・動悸があれば休憩",fr:"週2回",t:"20"},
      {c:"生活動作の回復のため、起き上がり・立ち上がり動作の練習を行う",n:"起立性低血圧に注意。ゆっくり動作する",fr:"毎回",t:"10"}],
- hm:"テレビを見ながらの足踏みを1日2回各5分行ってください。こまめに立ち上がる習慣をつけることも大切です。",
+ hm:"テレビを見ながらの足踏みを1日2回各5分。こまめに立ち上がる習慣をつける。",
  mo:"連続歩行距離（m）\n起き上がり・立ち上がりの自立度\n食事摂取量と体重の推移\n1日の活動時間・離床時間",
- fs:"体を動かす機会が減ったことで筋力や体力が低下し、日常動作に不安が出てきた",
- cmn:"【廃用症候群・フレイル】全身の筋力・体力低下（心身機能）が基本動作・日常生活動作の制限（活動制約）につながり、外出・社会参加の機会の喪失（参加制約）を招いています。"},
+ ai:"廃用による全身機能の低下に対し、段階的な活動量増加で心身機能を回復し、自立した生活と社会参加へつなげる計画。"},
 {id:"lumbar",kw:["腰椎","脊柱管","狭窄","圧迫骨折","腰痛","間欠性跛行"],
  lt:{f:"体幹の支持力を高め、腰部への負担を軽減する",a:"痛みを管理しながら日常の移動と家事が行える",p:"WISH"},
  st:{f:"体幹の筋力と柔軟性を維持し、疼痛を軽減する",a:"休憩を挟みながら連続歩行距離を延ばす",p:"WISH_SHORT"},
  pg:[{c:"腰部の安定のため、腹筋・背筋の等尺性トレーニングを行う",n:"前屈動作を避ける（圧迫骨折時）。痛みの範囲内で",fr:"週2回",t:"15"},
      {c:"歩行持久力の改善のため、平地歩行訓練を休憩を挟みつつ行う",n:"間欠性跛行の出現を観察。痛みが出たら休憩",fr:"週2回",t:"20"},
      {c:"柔軟性の維持のため、椅子座位での下肢・体幹のストレッチを行う",n:"反動をつけず静的に伸ばす",fr:"毎回",t:"10"}],
- hm:"仰向けでの膝抱えストレッチを朝晩各3回行ってください。長時間同じ姿勢を避け、こまめに体を動かしてください。",
- mo:"連続歩行距離と疼痛の出現タイミング\n腰部の疼痛の程度（0〜10点）\n日常動作（家事・買い物）の遂行状況\n体幹筋力の変化",
- fs:"腰の疾患による痛みやしびれで、歩行や立ち仕事に制限が生じている",
- cmn:"【腰部疾患】疼痛・間欠性跛行（心身機能）が歩行・生活行為の制限（活動制約）につながり、外出・趣味活動の縮小（参加制約）を招いています。"},
+ hm:"仰向けでの膝抱えストレッチを朝晩各3回。長時間同じ姿勢を避ける。",
+ mo:"連続歩行距離と疼痛の出現タイミング\n腰部の疼痛の程度（NRS）\n日常動作（家事・買い物）の遂行状況\n体幹筋力の変化",
+ ai:"腰部疾患による痛みと活動制限に対し、体幹の安定と痛みの管理を基盤に、生活行為と社会参加の回復を目指す計画。"},
 {id:"heart",kw:["心不全","心疾患","心房細動","狭心","心筋","NYHA"],
  lt:{f:"心肺持久力を安全に維持し、運動耐容能を高める",a:"息切れなく屋内移動と日常動作が行える",p:"WISH"},
  st:{f:"低強度の運動を継続し、体力の低下を防ぐ",a:"動悸・息切れなく入浴・着替えが行える",p:"WISH_SHORT"},
- pg:[{c:"心肺機能の維持のため、座位での軽い有酸素運動（ペダル漕ぎ等）を行う",n:"Borg指数11〜13以内で実施。動悸・息切れ時は即中止",fr:"週2回",t:"15"},
+ pg:[{c:"心肺機能の維持のため、座位での軽い有酸素運動（ペダル漕ぎ等）を行う",n:"運動強度を厳守。Borg指数11〜13以内。動悸・息切れ時は即中止",fr:"週2回",t:"15"},
      {c:"日常動作の維持のため、エネルギー節約動作の指導と練習を行う",n:"立ち上がりはゆっくり。入浴動作は特に注意",fr:"週1回",t:"15"},
-     {c:"下肢筋力の維持のため、椅子座位での低負荷な筋力訓練を行う",n:"息を止めない（バルサルバ禁止）。脈拍を確認",fr:"週2回",t:"10"}],
- hm:"散歩を1日10〜15分、息切れが出ない速さで行ってください。体重を毎日測定し、急な増加があればすぐにご連絡ください。",
+     {c:"下肢筋力の維持のため、椅子座位での低負荷な筋力訓練を行う",n:"息を止めない（バルサルバ禁止）。血圧・脈拍を確認",fr:"週2回",t:"10"}],
+ hm:"散歩を1日10〜15分。息切れが出ない速さで。体重を毎日測定し変動を確認。",
  mo:"運動時の脈拍・血圧の変動\n日常動作時の息切れの程度\n体重の変動（浮腫の有無）\n連続歩行距離と疲労感",
- fs:"心臓の病気の影響で息切れや動悸が起こりやすく、活動に慎重さが必要な",
- cmn:"【心疾患】運動耐容能の低下・息切れ（心身機能）が日常動作・活動量の制限（活動制約）につながり、外出・社会参加の縮小（参加制約）を招いています。"},
+ ai:"心疾患を有する利用者の安全を第一に、運動耐容能の維持と日常動作のエネルギー管理を通じて生活の質を保つ計画。"},
 {id:"resp",kw:["COPD","肺","呼吸","在宅酸素","SpO2","喘息"],
  lt:{f:"呼吸機能を維持し、息切れを軽減して活動量を増やす",a:"呼吸法を活用しながら日常動作を行える",p:"WISH"},
  st:{f:"腹式呼吸と口すぼめ呼吸を習得し、運動時の呼吸困難を軽減する",a:"休憩を活用しながら入浴・着替えが行える",p:"WISH_SHORT"},
  pg:[{c:"呼吸機能の改善のため、呼吸リハ（腹式呼吸・口すぼめ呼吸）を指導する",n:"SpO2を確認。90%以下で中止。在宅酸素使用者は流量を遵守",fr:"毎回",t:"10"},
      {c:"持久力の向上のため、平地歩行訓練を呼吸法を併用しながら行う",n:"息切れが強い日は負荷を軽減。無理をさせない",fr:"週2回",t:"15"},
      {c:"上肢機能の維持のため、軽い重錘を用いた上肢の筋力訓練を行う",n:"息を止めずに行う。呼気時に力を入れる",fr:"週1回",t:"10"}],
- hm:"口すぼめ呼吸を1日5回練習してください。入浴の前後には必ず休憩を取り、急いで動かないようにしてください。",
+ hm:"口すぼめ呼吸を1日5回練習。入浴前後に休憩を取る習慣をつける。",
  mo:"SpO2の安静時・運動時の値\n息切れの程度（修正Borgスケール）\n連続歩行距離\n日常動作（入浴・外出）の遂行状況",
- fs:"肺の病気で息切れが生じやすく、日常動作や外出に慎重さが必要な",
- cmn:"【呼吸器疾患】息切れ・呼吸困難（心身機能）が歩行・日常動作の制限（活動制約）につながり、外出・趣味活動の縮小（参加制約）を招いています。"},
+ ai:"呼吸器疾患による活動制限に対し、呼吸法の習得と段階的な運動で持久力を維持し、生活の自立と参加を目指す計画。"},
 {id:"ra",kw:["リウマチ","関節炎","RA","拘縮"],
  lt:{f:"関節の可動域を維持し、疼痛を管理しながら筋力の低下を防ぐ",a:"関節保護の方法を用いて日常動作を継続できる",p:"WISH"},
  st:{f:"疼痛のコントロールと関節可動域の維持を図る",a:"自助具を活用して食事・整容が行える",p:"WISH_SHORT"},
  pg:[{c:"関節可動域の維持のため、温熱後に愛護的な関節可動域訓練を行う",n:"関節保護の原則を厳守。腫脹・熱感がある関節は避ける",fr:"週2回",t:"15"},
      {c:"筋力の維持のため、関節に負担のかからない等尺性筋力訓練を行う",n:"痛みが出たら中止。炎症期は安静を優先",fr:"週2回",t:"10"},
      {c:"生活動作の維持のため、自助具の使い方と関節保護動作を指導する",n:"疲労を溜めない。午前の体調の良い時間帯に実施",fr:"週1回",t:"15"}],
- hm:"朝の手指のこわばり体操を5分間行ってください。就寝前の関節の軽いストレッチも継続してください。",
+ hm:"朝の手指のこわばり体操を5分間。就寝前の関節のストレッチ。",
  mo:"関節の疼痛・腫脹の変化\n朝のこわばりの持続時間\n握力の変化\n日常動作（食事・整容・着替え）の自立度",
- fs:"関節リウマチにより手指や関節に変形と痛みがあり、細かい動作や重いものを持つことに困難がある",
- cmn:"【関節リウマチ】関節変形・疼痛（心身機能）が手指動作・歩行の制限（活動制約）につながり、趣味・社会的交流の縮小（参加制約）を招いています。"}
+ ai:"関節疾患による痛みと変形に対し、関節保護と疼痛管理を基盤に、日常動作の維持と生活参加を目指す計画。"}
 ];
-const DEFAULT_PLAN={id:"default",kw:[],
+const DEFAULT_PLAN = {id:"default",kw:[],
  lt:{f:"全身の筋力・バランスを維持し、体力の低下を防ぐ",a:"安全に日常動作を行い、生活の自立を維持する",p:"WISH"},
  st:{f:"基本的な運動習慣を身につけ、筋力を維持する",a:"日常動作を安定して行える",p:"WISH_SHORT"},
  pg:[{c:"筋力維持のため、椅子座位での上下肢の筋力トレーニングを行う",n:"体調に配慮し無理のない範囲で",fr:"週2回",t:"15"},
      {c:"バランスの維持のため、立位での重心移動訓練を行う",n:"転倒に注意。必ず手すりの近くで",fr:"週2回",t:"15"},
      {c:"柔軟性の維持のため、全身のストレッチ体操を行う",n:"痛みのない範囲で。反動をつけない",fr:"毎回",t:"10"}],
- hm:"自宅で1日1回の立ち座り運動を10回行ってください。短い散歩を10分程度、習慣にしてください。",
+ hm:"自宅で1日1回の立ち座り運動を10回。散歩を10分程度。",
  mo:"歩行の安定性\n日常動作の自立度\n運動への参加意欲\n体力・持久力の変化",
- fs:"身体機能の低下により、日常動作や移動に不安が生じている",
- cmn:"身体機能の低下（心身機能）が日常生活動作の制限（活動制約）につながり、外出・社会参加の機会の縮小（参加制約）を招いています。"
+ ai:"身体機能の維持と活動量の確保を通じて、生活の自立と社会参加を支援する計画。"
 };
+
 function matchCategory(disease){
   if(!disease) return DEFAULT_PLAN;
   const d = disease.toLowerCase();
@@ -617,22 +541,105 @@ function buildPlanFromTemplate(info){
   const wishShort = wish.length > 20 ? wish.slice(0,20)+"に向けて取り組む" : wish + "に向けた準備をする";
   const replace = s => s.replace("WISH_SHORT", wishShort).replace("WISH_ACT", wish).replace("WISH", wish);
   const plan = {
-    long_term:{function:replace(cat.lt.f),activity:replace(cat.lt.a),participation:replace(cat.lt.p)},
-    short_term:{function:replace(cat.st.f),activity:replace(cat.st.a),participation:replace(cat.st.p)},
-    programs:cat.pg.map(p=>({content:p.c,caution:info.実施上の留意事項||p.n,frequency:p.fr,time:p.t,provider:info.主な実施者||"機能訓練指導員"})),
-    home_exercise:cat.hm, special_notes:info.特記||"特になし", monitoring:cat.mo, aim:"", family_explanation:""
+    long_term:  {function:replace(cat.lt.f), activity:replace(cat.lt.a), participation:replace(cat.lt.p)},
+    short_term: {function:replace(cat.st.f), activity:replace(cat.st.a), participation:replace(cat.st.p)},
+    programs: cat.pg.map(p=>({content:p.c, caution:info.実施上の留意事項||p.n, frequency:p.fr, time:p.t, provider:info.主な実施者||"機能訓練指導員"})),
+    home_exercise: cat.hm,
+    special_notes: info.特記 || "特になし",
+    aim: replace(cat.ai),
+    monitoring: cat.mo,
+    family_explanation: ""
   };
-  const adl=info.困っている動作||[];
-  if(adl.includes("トイレ動作")&&!plan.short_term.activity.includes("トイレ")) plan.short_term.activity+="。トイレ動作の自立度を高める";
-  if(adl.includes("入浴")&&!plan.programs.some(p=>p.content.includes("入浴"))) plan.programs.push({content:"入浴動作の自立のため、浴室内での立ち座り・またぎ動作の練習を行う",caution:"滑りに注意。血圧変動に配慮",frequency:"週1回",time:"10",provider:info.主な実施者||"機能訓練指導員"});
-  const nm=info.氏名||"ご利用者";
-  const wishText=wish!=="生活上の楽しみや役割を取り戻す"?"「"+wish+"」":"生活の自立";
-  plan.aim=cat.cmn+"\nICFの視点から、【心身機能】"+plan.long_term.function+"を基盤に、【活動】"+plan.long_term.activity+"の実現を通じて、【参加】"+plan.long_term.participation+"につなげる計画です。\n3か月後の再評価で進捗を確認します。ケアプランとの整合性や変化があればご連絡いたします。";
-  const prog1=plan.programs[0]?plan.programs[0].content.split("のため")[0]+"の練習":"筋力訓練";
-  const prog2=plan.programs[1]?plan.programs[1].content.split("のため")[0]+"の訓練":"バランス訓練";
-  const stAct=plan.short_term.activity.split("。")[0];
-  plan.family_explanation=nm+"様は現在、"+cat.fs+"状態です。\nデイサービスでは、"+prog1+"や"+prog2+"などに週2〜3回取り組んでいます。"+nm+"様の状態に合わせた安全なメニューで、担当スタッフが毎回見守りながら行います。\n目標は、"+wishText+"ことです。まず3か月で「"+stAct+"」を目指しています。\nご家庭では、"+cat.hm+"\n体調の変化や気になることがあれば、いつでもスタッフにお声がけください。一緒に目標を目指してまいります。";
+  // ADLに応じてプログラムを微調整
+  const adl = info.困っている動作 || [];
+  if(adl.includes("トイレ動作") && !plan.short_term.activity.includes("トイレ")){
+    plan.short_term.activity += "。トイレ動作の自立度を高める";
+  }
+  if(adl.includes("入浴") && !plan.programs.some(p=>p.content.includes("入浴"))){
+    plan.programs.push({content:"入浴動作の自立のため、浴室内での立ち座り・またぎ動作の練習を行う",caution:"滑りに注意。血圧変動に配慮",frequency:"週1回",time:"10",provider:info.主な実施者||"機能訓練指導員"});
+  }
+  // 家族向け説明文の組み立て
+  const nm = info.氏名 || "ご利用者";
+  const dis = info.病名 ? info.病名 + "の影響で" : "";
+  plan.family_explanation =
+    nm + "様は現在、" + dis + "日常の動作や移動に不安がある状態です。" +
+    "デイサービスでは、安全にお体を動かす訓練に取り組み、" +
+    (wish!=="生活上の楽しみや役割を取り戻す" ? "「" + wish + "」という目標に向けて" : "生活の自立に向けて") +
+    "お手伝いをいたします。" +
+    "ご家庭では、" + cat.hm.split("。")[0] + "をお願いいたします。" +
+    "無理のない範囲で、一緒に目標を目指していきましょう。";
   return plan;
+}
+
+
+/* ====== Gemini API ====== */
+(function(){
+  var btn=document.getElementById("setKeyBtn"),st=document.getElementById("keyStatus"),ki=document.getElementById("geminiKey");
+  if(!btn)return;
+  // 保存済みキーを復元
+  var saved=sessionStorage.getItem("geminiKey");
+  if(saved){ki.value=saved;st.textContent="✅ 設定済み";st.style.color="#90EE90";}
+  btn.addEventListener("click",function(){
+    var k=ki.value.trim();
+    if(!k){st.textContent="❌ キーを入力してください";st.style.color="#ffaaaa";return;}
+    sessionStorage.setItem("geminiKey",k);
+    st.textContent="✅ 設定しました";st.style.color="#90EE90";
+  });
+})();
+
+function getAgeCategory(birth){
+  if(!birth)return"高齢者";
+  var m=birth.match(/(明治|大正|昭和|平成|令和)\s*(\d+)/);
+  if(!m)return"高齢者";
+  var y=parseInt(m[2]);
+  var base={明治:1868,大正:1912,昭和:1926,平成:1989,令和:2019}[m[1]]||1926;
+  var born=base+y-1, age=2026-born;
+  return Math.floor(age/10)*10+"代";
+}
+
+async function callGemini(info){
+  var key=sessionStorage.getItem("geminiKey");
+  if(!key)return null;
+  var anon={
+    年齢層:getAgeCategory(info.生年月日)+(info.性別||""),
+    要介護度:info.要介護度,
+    疾患名:info.病名,
+    合併疾患:info.合併疾患,
+    治療経過:info.治療経過,
+    留意事項:info.実施上の留意事項,
+    困っている動作:(info.困っている動作||[]).join("、"),
+    興味関心:(info.興味関心||[]).join("、"),
+    本人の希望:info.本人の希望,
+    家族の希望:info.家族の希望,
+    歩行の状況:info.歩行の状況,
+    社会参加の状況:info.社会参加の状況
+  };
+  var prompt="あなたは通所介護の機能訓練指導員です。以下の利用者状態（個人を特定する情報は含みません）をもとに、個別機能訓練計画書（別紙様式3-3・令和6年度改定）を作成してください。
+
+【利用者の状態】
+"+JSON.stringify(anon,null,2)+"
+
+【作成方針】ICFの視点で心身機能・活動・参加の3観点をバランスよく。本人の希望を参加目標に反映。プログラムは「○○のために△△する」形式で3〜4件。留意点・頻度・時間も設定。家族説明文は専門用語なしで200〜300字。ケアマネ向けのねらいはICFの制約連鎖を示す。
+
+【出力】以下のJSONのみを返す。前後の文章不要。
+{"long_term":{"function":"...","activity":"...","participation":"..."},"short_term":{"function":"...","activity":"...","participation":"..."},"programs":[{"content":"...","caution":"...","frequency":"週2回","time":"15","provider":"機能訓練指導員"}],"home_exercise":"...","special_notes":"特になし","aim":"...","monitoring":"...","family_explanation":"..."}";
+  try{
+    var res=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key="+key,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.3,maxOutputTokens:2000}})
+    });
+    var data=await res.json();
+    if(data.error)throw new Error(data.error.message||"Gemini APIエラー");
+    var text=(data.candidates||[])[0]?.content?.parts?.[0]?.text||"";
+    text=text.replace(/```json/g,"").replace(/```/g,"").trim();
+    var s=text.indexOf("{"),e=text.lastIndexOf("}");
+    if(s>=0&&e>=0)text=text.slice(s,e+1);
+    return JSON.parse(text);
+  }catch(err){
+    console.error("Gemini API error:",err);
+    return null;
+  }
 }
 
 async function generate(){
@@ -641,7 +648,19 @@ async function generate(){
   setStatus("計画を作成しています…");
   try{
     const info = collectInput();
-    const plan = buildPlanFromTemplate(info);
+    var plan = null;
+    var geminiKey = sessionStorage.getItem("geminiKey");
+    if(geminiKey){
+      setStatus("AI強化モードで計画を作成しています…（10〜20秒）");
+      plan = await callGemini(info);
+      if(!plan){
+        setStatus("AI生成に失敗しました。テンプレート方式で作成します。");
+        await new Promise(r=>setTimeout(r,1500));
+        plan = buildPlanFromTemplate(info);
+      }
+    }else{
+      plan = buildPlanFromTemplate(info);
+    }
     fillResult(plan);
     var elapsed=stopTimer();
     var tlbl=$("timerLabel");if(tlbl)tlbl.textContent="入力時間："+elapsed+"（完了）";
@@ -777,8 +796,7 @@ td{border:1px solid #333;padding:5px 7px;vertical-align:top;font-size:10pt;}
 <tr><td class="lbl">課題とその要因</td><td colspan="3" style="height:50px;"></td></tr>
 </table>
 
-<p class="foot">※本計画書はテンプレートをもとに作成されています。内容は機能訓練指導員が確認・修正のうえ、利用者・家族へ説明し同意を得てください。担当ケアマネジャーへの交付・報告が必要です。</p>
-<p class="foot">作成日時：${new Date().toLocaleString("ja-JP")}　入力・作成所要時間：${lastData&&lastData.elapsed?lastData.elapsed:"未計測"}</p>
+<p class="foot">※本計画書はAIによる下書きをもとに作成されています。内容は機能訓練指導員が確認・修正のうえ、利用者・家族へ説明し同意を得てください。担当ケアマネジャーへの交付・報告が必要です。</p>
 
 <div style="page-break-before:always;"></div>
 <h1>ご本人・ご家族へのご説明</h1>
@@ -823,14 +841,11 @@ function setBusy(b){
 function setStatus(msg,err){
   const s=$("status"); s.textContent=msg; s.className="status"+(err?" err":"");
 }
-function on(id,evt,fn){ var el=$(id); if(el) el.addEventListener(evt,fn); }
-on("genBtn","click",generate);
-on("regenBtn","click",generate);
-on("wordBtn","click",downloadWord);
-on("files","change",function(e){ addFiles(e.target.files); e.target.value=""; });
-on("parseBtn","click",parseBulk);
-on("clearPasteBtn","click",function(){ var bp=$("bulkPaste"); if(bp) bp.value=""; var ps=$("parseStatus"); if(ps) ps.textContent=""; });
-on("clearBtn","click",async function(){
+$("genBtn").addEventListener("click",generate);
+$("regenBtn").addEventListener("click",generate);
+$("wordBtn").addEventListener("click",downloadWord);
+$("files").addEventListener("change",e=>{ addFiles(e.target.files); e.target.value=""; });
+$("clearBtn").addEventListener("click",async()=>{
   if(!confirm("入力内容をすべて消去しますか？")) return;
   FIELDS.forEach(f=>{ if($(f)) $(f).value=""; });
   document.querySelectorAll(".chip.on").forEach(l=>{l.classList.remove("on");l.querySelector("input").checked=false;});
