@@ -573,19 +573,7 @@ function buildPlanFromTemplate(info){
 
 
 /* ====== Gemini API ====== */
-(function(){
-  var btn=document.getElementById("setKeyBtn"),st=document.getElementById("keyStatus"),ki=document.getElementById("geminiKey");
-  if(!btn)return;
-  // 保存済みキーを復元
-  var saved=sessionStorage.getItem("geminiKey");
-  if(saved){ki.value=saved;st.textContent="✅ 設定済み";st.style.color="#90EE90";}
-  btn.addEventListener("click",function(){
-    var k=ki.value.trim();
-    if(!k){st.textContent="❌ キーを入力してください";st.style.color="#ffaaaa";return;}
-    sessionStorage.setItem("geminiKey",k);
-    st.textContent="✅ 設定しました";st.style.color="#90EE90";
-  });
-})();
+/* APIキー設定はon()で登録 */
 
 function getAgeCategory(birth){
   if(!birth)return"高齢者";
@@ -842,6 +830,20 @@ function setStatus(msg,err){
   const s=$("status"); s.textContent=msg; s.className="status"+(err?" err":"");
 }
 $("genBtn").addEventListener("click",generate);
+// APIキー設定ボタン
+(function(){
+  var ki=$("geminiKey"),st=$("keyStatus"),btn=$("setKeyBtn");
+  if(!btn)return;
+  var saved=sessionStorage.getItem("geminiKey");
+  if(saved&&ki&&st){ki.value=saved;st.textContent="✅ 設定済み";st.style.color="#90EE90";}
+  btn.addEventListener("click",function(){
+    if(!ki||!st)return;
+    var k=ki.value.trim();
+    if(!k){st.textContent="❌ キーを入力してください";st.style.color="#ffaaaa";return;}
+    sessionStorage.setItem("geminiKey",k);
+    st.textContent="✅ 設定しました";st.style.color="#90EE90";
+  });
+})();
 $("regenBtn").addEventListener("click",generate);
 $("wordBtn").addEventListener("click",downloadWord);
 $("files").addEventListener("change",e=>{ addFiles(e.target.files); e.target.value=""; });
