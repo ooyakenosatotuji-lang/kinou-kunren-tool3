@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>個別機能訓練計画書 自動作成ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#0e6b6b;
+    --teal-dark:#0a4f4f;
+    --teal-light:#e3f0ef;
+    --sand:#c9a24a;
+    --ink:#22302f;
+    --muted:#5d6f6e;
+    --line:#cddddc;
+    --bg:#f4f7f6;
+    --white:#ffffff;
+    --warn-bg:#fff6e6;
+    --warn-bd:#e0b85a;
+    --radius:14px;
+    --shadow:0 2px 8px rgba(14,107,107,.08),0 8px 24px rgba(14,107,107,.06);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;font-family:"BIZ UDPGothic",sans-serif;background:var(--bg);
+    color:var(--ink);line-height:1.7;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:0 16px 80px;}
+  header.app{
+    background:linear-gradient(135deg,var(--teal),var(--teal-dark));
+    color:#fff;padding:26px 22px;border-radius:0 0 24px 24px;
+    box-shadow:var(--shadow);position:relative;overflow:hidden;
+  }
+  header.app::after{
+    content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;
+    background:radial-gradient(circle,rgba(201,162,74,.35),transparent 70%);
+  }
+  header.app h1{
+    font-family:"Zen Maru Gothic",sans-serif;font-size:1.5rem;margin:0 0 4px;
+    letter-spacing:.02em;
+  }
+  header.app p{margin:0;font-size:.86rem;opacity:.92;}
+  .lead{
+    max-width:920px;margin:18px auto 0;padding:0 16px;color:var(--muted);
+    font-size:.9rem;
+  }
+  .card{
+    background:var(--white);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);margin-top:20px;overflow:hidden;
+  }
+  .card > .head{
+    display:flex;align-items:center;gap:12px;padding:16px 20px;
+    background:var(--teal-light);border-bottom:1px solid var(--line);
+  }
+  .card > .head .num{
+    flex:none;width:30px;height:30px;border-radius:50%;background:var(--teal);
+    color:#fff;display:grid;place-items:center;font-weight:700;font-size:.95rem;
+    font-family:"Zen Maru Gothic",sans-serif;
+  }
+  .card > .head h2{margin:0;font-size:1.06rem;font-family:"Zen Maru Gothic",sans-serif;color:var(--teal-dark);}
+  .card > .body{padding:18px 20px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;}
+  @media(max-width:640px){.grid{grid-template-columns:1fr;}}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field.full{grid-column:1 / -1;}
+  label{font-size:.84rem;font-weight:700;color:var(--teal-dark);}
+  label .hint{display:block;font-weight:400;color:var(--muted);font-size:.76rem;margin-top:2px;}
+  input,select,textarea{
+    font-family:inherit;font-size:.95rem;padding:10px 12px;border:1.5px solid var(--line);
+    border-radius:10px;background:#fbfdfc;color:var(--ink);width:100%;transition:.15s;
+  }
+  input:focus,select:focus,textarea:focus{
+    outline:none;border-color:var(--teal);background:#fff;
+    box-shadow:0 0 0 3px rgba(14,107,107,.12);
+  }
+  textarea{resize:vertical;min-height:64px;}
+  .checks{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1.5px solid var(--line);
+    border-radius:999px;background:#fbfdfc;cursor:pointer;font-size:.85rem;user-select:none;transition:.12s;
+  }
+  .chip input{display:none;}
+  .chip.on{background:var(--teal);color:#fff;border-color:var(--teal);}
+  .subhead{font-weight:700;color:var(--teal-dark);font-size:.9rem;margin:6px 0 2px;}
+  .btn{
+    font-family:"Zen Maru Gothic",sans-serif;border:none;border-radius:12px;
+    padding:14px 22px;font-size:1rem;font-weight:700;cursor:pointer;transition:.15s;
+    display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  }
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-primary{background:var(--teal);color:#fff;box-shadow:0 4px 14px rgba(14,107,107,.3);}
+  .btn-primary:hover:not(:disabled){background:var(--teal-dark);transform:translateY(-1px);}
+  .btn-gold{background:var(--sand);color:#3a2c08;box-shadow:0 4px 14px rgba(201,162,74,.35);}
+  .btn-gold:hover:not(:disabled){filter:brightness(1.05);transform:translateY(-1px);}
+  .btn-ghost{background:#fff;color:var(--teal-dark);border:1.5px solid var(--teal);}
+  .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;}
+  .note{
+    background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:10px;
+    padding:11px 14px;font-size:.83rem;color:#6b5410;margin-top:14px;display:flex;gap:8px;
+  }
+  .note b{color:#7a5e00;}
+  .gen-box{padding:18px 20px;}
+  .gen-block{margin-bottom:18px;}
+  .gen-block .gh{font-weight:700;color:var(--teal-dark);font-size:.92rem;margin-bottom:4px;font-family:"Zen Maru Gothic",sans-serif;}
+  .prog{
+    border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;background:#fbfdfc;
+  }
+  .prog .pt{font-weight:700;color:var(--teal);margin-bottom:8px;}
+  .spinner{
+    width:18px;height:18px;border:3px solid rgba(255,255,255,.4);border-top-color:#fff;
+    border-radius:50%;animation:spin .7s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .hidden{display:none;}
+  .status{font-size:.85rem;color:var(--muted);margin-top:10px;}
+  .status.err{color:#b3261e;font-weight:700;}
+  footer.app{text-align:center;color:var(--muted);font-size:.78rem;margin-top:30px;}
+  .tworow{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:640px){.tworow{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<header class="app">
+  <h1>個別機能訓練計画書 自動作成ツール</h1>
+  <p>通所介護（機能訓練）／別紙様式3-3・令和6年度改定対応</p>
+</header>
+<div class="lead">
+  利用者の情報を入力し、<b>「計画を自動作成」</b>を押すと、長期・短期目標や訓練プログラムの下書きが作られます。内容を確認・修正したうえで、<b>「Wordで出力」</b>から計画書をダウンロードできます。
+  <div id="timerBox" style="display:none;margin-top:10px;background:var(--teal-light);border:1px solid var(--teal);border-radius:10px;padding:8px 14px;font-size:.88rem;color:var(--teal-dark);display:inline-flex;align-items:center;gap:10px;"><span>⏱</span><span id="timerLabel">入力時間：計測中…</span></div>
+</div>
+
+<div class="wrap">
+
+  <!-- STEP 0 書類から一括読み込み -->
+  <section class="card">
+    <div class="head"><span class="num">0</span><h2>書類から一括読み込み（任意）</h2></div>
+    <div class="body">
+      <p style="margin:0 0 10px;color:var(--muted);font-size:.88rem;">
+        ケアプラン・フェイスシート・アセスメント表など<b>手元の書類のテキストをコピーして貼り付ける</b>と、氏名・要介護度・病名・本人の希望などを自動で各入力欄に振り分けます。読み込み後も手入力で修正できます。
+      </p>
+      <div class="field">
+        <label>テキストを貼り付け<span class="hint">Ctrl+V（Macは⌘+V）で貼り付けてください。書類の形式は問いません。</span></label>
+        <textarea id="bulkPaste" style="min-height:100px;" placeholder="例）&#10;氏名：佐藤 太郎　性別：男性&#10;要介護度：要介護2&#10;病名：変形性膝関節症&#10;本人の希望：また畑仕事がしたい&#10;家族の希望：転ばないでほしい"></textarea>
+      </div>
+      <div class="actions" style="margin-top:10px;">
+        <button class="btn btn-primary" id="parseBtn">各入力欄に読み込む</button>
+        <button class="btn btn-ghost" id="clearPasteBtn">貼り付け欄をクリア</button>
+      </div>
+      <div id="parseStatus" style="font-size:.84rem;color:var(--teal-dark);margin-top:8px;"></div>
+    </div>
+  </section>
+
+
+  <!-- STEP 1 基本情報 -->
+  <section class="card">
+    <div class="head"><span class="num">1</span><h2>基本情報</h2></div>
+    <div class="body">
+      <div class="grid">
+        <div class="field"><label>事業所名</label><input id="office" placeholder="〇〇デイサービスセンター"></div>
+        <div class="field"><label>計画作成者・職種</label><input id="author" placeholder="例）山田花子（看護職員）"></div>
+        <div class="field"><label>利用者氏名</label><input id="name" placeholder="例）佐藤 太郎"></div>
+        <div class="field"><label>性別</label>
+          <select id="sex"><option value="">選択</option><option>男</option><option>女</option></select>
+        </div>
+        <div class="field"><label>生年月日</label><input id="birth" placeholder="例）昭和10年4月1日"></div>
+        <div class="field"><label>要介護度</label>
+          <select id="care"><option value="">選択</option>
+            <option>要支援1</option><option>要支援2</option>
+            <option>要介護1</option><option>要介護2</option><option>要介護3</option>
+            <option>要介護4</option><option>要介護5</option><option>申請中</option></select>
+        </div>
+        <div class="field"><label>作成日</label><input id="cdate" type="text" placeholder="例）令和7年6月5日"></div>
+        <div class="field"><label>初回作成日</label><input id="fdate" placeholder="例）令和6年12月1日"></div>
+        <div class="field"><label>障害高齢者の日常生活自立度</label>
+          <select id="adl_auto"><option value="">選択</option>
+            <option>自立</option><option>J1</option><option>J2</option><option>A1</option><option>A2</option>
+            <option>B1</option><option>B2</option><option>C1</option><option>C2</option></select>
+        </div>
+        <div class="field"><label>認知症高齢者の日常生活自立度</label>
+          <select id="dem_auto"><option value="">選択</option>
+            <option>自立</option><option>Ⅰ</option><option>Ⅱa</option><option>Ⅱb</option>
+            <option>Ⅲa</option><option>Ⅲb</option><option>Ⅳ</option><option>M</option></select>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2 本人・家族の希望、社会参加、居宅環境 -->
+  <section class="card">
+    <div class="head"><span class="num">2</span><h2>本人・家族の希望／生活の状況</h2></div>
+    <div class="body">
+      <div class="grid">
+        <div class="field full"><label>利用者本人の希望
+          <span class="hint">「どうなりたい」「何がしたい」を本人の言葉で。短くてもOK（AIが整えます）</span></label>
+          <textarea id="wish_self" placeholder="例）自分でトイレに行けるようになりたい。また畑仕事をしたい。"></textarea></div>
+        <div class="field full"><label>家族の希望
+          <span class="hint">家族の要望・期待すること</span></label>
+          <textarea id="wish_family" placeholder="例）転ばずに家の中を移動できるようになってほしい。"></textarea></div>
+        <div class="field full"><label>本人の社会参加の状況
+          <span class="hint">性格・家庭での役割・人との交流など</span></label>
+          <textarea id="social" placeholder="例）以前は近所付き合いが活発。今は外出が減っている。"></textarea></div>
+        <div class="field full"><label>居宅の環境
+          <span class="hint">普段過ごす部屋、手すり・段差・福祉用具などの住環境</span></label>
+          <textarea id="home" placeholder="例）2階建て。玄関に段差あり。廊下に手すりなし。歩行は杖を使用。"></textarea></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3 健康状態 -->
+  <section class="card">
+    <div class="head"><span class="num">3</span><h2>健康状態・経過</h2></div>
+    <div class="body">
+      <div class="grid">
+        <div class="field"><label>病名（主要因）</label>
+          <input id="disease" placeholder="例）変形性膝関節症（左）"></div>
+        <div class="field"><label>合併疾患・コントロール状態</label>
+          <input id="comorbid" placeholder="例）高血圧（内服でコントロール良好）"></div>
+        <div class="field full"><label>治療経過
+          <span class="hint">入院・手術・退院の経過など。わかる範囲で</span></label>
+          <textarea id="course" placeholder="例）令和6年〇月に左人工膝関節置換術。杖歩行が安定し自宅退院。"></textarea></div>
+        <div class="field full"><label>機能訓練実施上の留意事項
+          <span class="hint">運動の禁忌・負荷の制限・注意点など。なければ空欄でOK（AIが状態から提案します）</span></label>
+          <textarea id="caution" placeholder="例）左膝に過度な負荷をかけない。血圧変動に注意。"></textarea></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 4 ADL・興味関心 -->
+  <section class="card">
+    <div class="head"><span class="num">4</span><h2>心身・生活の状況（チェック）</h2></div>
+    <div class="body">
+      <div class="subhead">現在、困っている・介助が必要な動作（あてはまるものをタップ）</div>
+      <div class="checks" id="adlChecks"></div>
+      <div class="subhead" style="margin-top:16px;">興味・関心・やりたいこと（あてはまるものをタップ）</div>
+      <div class="checks" id="interestChecks"></div>
+      <div class="grid" style="margin-top:14px;">
+        <div class="field"><label>歩行の状況</label>
+          <select id="gait"><option value="">選択</option>
+            <option>自立（杖なし）</option><option>杖歩行</option><option>歩行器</option>
+            <option>見守り歩行</option><option>介助歩行</option><option>車いす（自走）</option><option>車いす（全介助）</option></select></div>
+        <div class="field"><label>主な訓練の実施者（職種）</label>
+          <input id="provider" placeholder="例）機能訓練指導員（看護職員）"></div>
+        <div class="field full"><label>その他、特記事項（任意）
+          <span class="hint">補足したい情報があれば自由に</span></label>
+          <textarea id="extra" placeholder="例）意欲は高い。午前中の方が体調が安定している。"></textarea></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 5 参考資料の添付（現在はテンプレート方式のため非表示） -->
+  <section class="card hidden" style="display:none;"><!-- 添付セクション開始
+  <section class="card">
+    <div class="head"><span class="num">+</span><h2>参考資料の添付（任意）</h2></div>
+    <div class="body">
+      <p style="margin:0 0 12px;color:var(--muted);font-size:.9rem;">
+        手書きのアセスメント表・フェイスシート・前回の計画書・メモなどを、<b>写真やPDF</b>で添付できます。AIが内容を読み取り、上の入力と合わせて計画に反映します。空欄の項目は資料から補います。
+      </p>
+      <label for="files" class="btn btn-ghost" style="cursor:pointer;">📎 ファイルを選ぶ（写真・PDF）</label>
+      <input id="files" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,application/pdf" style="display:none;">
+      <div id="fileList" style="margin-top:12px;display:flex;flex-direction:column;gap:8px;"></div>
+      <div class="note" style="margin-top:12px;">
+        <span>🔒</span>
+        <div>手書きは明るく鮮明に撮影してください（推奨：JPEG／PNG／PDF）。iPhoneのHEIC形式は読み取れないことがあります。<b>個人情報を含むため取り扱いにご注意ください。</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 生成ボタン -->
+  <div class="actions" style="margin-top:22px;">
+    <button class="btn btn-primary" id="genBtn">
+      <span id="genLabel">計画を自動作成</span>
+    </button>
+    <button class="btn btn-ghost" id="clearBtn">入力をクリア</button>
+  </div>
+  <div class="status" id="status"></div>
+  <div class="note">
+    <span>⚠</span>
+    <div><b>必ずご確認ください：</b>自動作成されるのは下書きです。利用者の実際の状態に合っているか、機能訓練指導員が必ず確認・修正してください。医療的判断や禁忌の最終確認は専門職の責任で行ってください。</div>
+  </div>
+
+  <!-- 生成結果（編集可能） -->
+  <section class="card hidden" id="resultCard">
+    <div class="head"><span class="num">5</span><h2>作成された計画（確認・修正できます）</h2></div>
+    <div class="gen-box">
+
+      <div class="gen-block">
+        <div class="gh">長期目標（おおむね6か月）</div>
+        <div class="grid">
+          <div class="field"><label>心身機能</label><textarea id="lt_func"></textarea></div>
+          <div class="field"><label>活動</label><textarea id="lt_act"></textarea></div>
+          <div class="field full"><label>参加</label><textarea id="lt_part"></textarea></div>
+        </div>
+      </div>
+
+      <div class="gen-block">
+        <div class="gh">短期目標（おおむね3か月）</div>
+        <div class="grid">
+          <div class="field"><label>心身機能</label><textarea id="st_func"></textarea></div>
+          <div class="field"><label>活動</label><textarea id="st_act"></textarea></div>
+          <div class="field full"><label>参加</label><textarea id="st_part"></textarea></div>
+        </div>
+      </div>
+
+      <div class="gen-block">
+        <div class="gh">この計画のねらい・根拠 <span style="font-weight:400;color:var(--muted);font-size:.78rem;">（ケアマネ・多職種への説明用）</span></div>
+        <div class="field"><textarea id="aim"></textarea></div>
+      </div>
+
+      <div class="gen-block">
+        <div class="gh">機能訓練プログラム</div>
+        <div id="programs"></div>
+      </div>
+
+      <div class="gen-block">
+        <div class="gh">3か月後の確認ポイント <span style="font-weight:400;color:var(--muted);font-size:.78rem;">（次回モニタリングで見るところ）</span></div>
+        <div class="field"><textarea id="monitoring" style="min-height:90px;"></textarea></div>
+      </div>
+
+      <div class="gen-block">
+        <div class="tworow">
+          <div class="field"><label>利用時間以外に本人・家族が行うこと（自主訓練）</label><textarea id="home_ex"></textarea></div>
+          <div class="field"><label>特記事項</label><textarea id="special"></textarea></div>
+        </div>
+      </div>
+
+      <div class="gen-block">
+        <div class="gh">ご本人・ご家族へのご説明（やさしい言葉） <span style="font-weight:400;color:var(--muted);font-size:.78rem;">（別紙として一緒に出力／同意取得に使えます）</span></div>
+        <div class="field"><textarea id="family_exp" style="min-height:120px;"></textarea></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-gold" id="wordBtn">Wordで出力（ダウンロード）</button>
+        <button class="btn btn-ghost" id="regenBtn">もう一度AIで作り直す</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="app">機能訓練支援ツール</footer>
+</div>
+
+<script>
+/* ====== 選択肢 ====== */
+const ADL_ITEMS = ["歩行","立ち上がり","階段昇降","入浴","トイレ動作","着替え","食事","整容","移乗","屋外への外出","家事（調理・掃除）","買い物"];
+const INTEREST_ITEMS = ["散歩・外出","庭仕事・畑","料理","買い物","趣味（手芸・園芸等）","友人・近所との交流","旅行","お風呂を楽しむ","孫と過ごす","体を動かすこと"];
+
+function buildChips(containerId, items){
+  const c = document.getElementById(containerId);
+  items.forEach(t=>{
+    const lab = document.createElement("label");
+    lab.className = "chip";
+    lab.innerHTML = `<input type="checkbox" value="${t}">${t}`;
+    const cb = lab.querySelector("input");
+    cb.addEventListener("change",()=> lab.classList.toggle("on", cb.checked));
+    c.appendChild(lab);
+  });
+}
+buildChips("adlChecks", ADL_ITEMS);
+buildChips("interestChecks", INTEREST_ITEMS);
+
+function checked(containerId){
+  return [...document.querySelectorAll(`#${containerId} input:checked`)].map(i=>i.value);
+}
+const $ = id => document.getElementById(id);
+const v = id => ($(id)?.value || "").trim();
+
+/* ====== 下書きの自動保存（端末内・本人のみ） ====== */
+const FIELDS = ["office","author","name","sex","birth","care","cdate","fdate","adl_auto","dem_auto",
+  "wish_self","wish_family","social","home","disease","comorbid","course","caution","gait","provider","extra"];
+// 自動保存は実行環境に依存しエラーの原因となり得るため使用しない。
+
+/* ====== 入力時間計測 ====== */
+var startTime=null,inputTimer=null;
+function startTimer(){
+  if(startTime)return;
+  startTime=Date.now();
+  var box=$("timerBox");if(box)box.style.display="inline-flex";
+  inputTimer=setInterval(function(){
+    var sec=Math.floor((Date.now()-startTime)/1000),m=Math.floor(sec/60),s=sec%60;
+    var lbl=$("timerLabel");if(lbl)lbl.textContent="入力時間："+(m>0?m+"分"+String(s).padStart(2,"0")+"秒":s+"秒");
+  },1000);
+}
+function stopTimer(){
+  if(inputTimer){clearInterval(inputTimer);inputTimer=null;}
+  if(!startTime)return"未計測";
+  var sec=Math.floor((Date.now()-startTime)/1000),m=Math.floor(sec/60),s=sec%60;
+  return m>0?m+"分"+String(s).padStart(2,"0")+"秒":s+"秒";
+}
+function resetTimer(){
+  startTime=null;if(inputTimer){clearInterval(inputTimer);inputTimer=null;}
+  var box=$("timerBox"),lbl=$("timerLabel");
+  if(box)box.style.display="none";if(lbl)lbl.textContent="入力時間：計測中…";
+}
+document.addEventListener("input",function(e){if(e.target.id!=="bulkPaste")startTimer();});
+document.addEventListener("change",function(){startTimer();});
+
+/* ====== 一括貼り付け解析 ====== */
+var CARE_OPTS=["要支援1","要支援2","要介護1","要介護2","要介護3","要介護4","要介護5"];
+var GAIT_MAP={"自立（杖なし）":["自立","独歩"],"杖歩行":["杖"],"歩行器":["歩行器"],"見守り歩行":["見守り"],"介助歩行":["介助歩行","歩行介助"],"車いす（自走）":["車いす","車椅子"]};
+var ADL_KW={"歩行":["歩行困難","歩けない"],"立ち上がり":["立ち上がり"],"階段昇降":["階段","段差"],"入浴":["入浴","お風呂"],"トイレ動作":["トイレ","排泄"],"着替え":["着替え","更衣"],"食事":["食事困難","摂食"],"整容":["整容","洗顔"],"移乗":["移乗"],"屋外への外出":["外出困難"],"家事（調理・掃除）":["家事","調理","掃除"],"買い物":["買い物"]};
+function parseBulk(){
+  var raw=($("bulkPaste")||{}).value||"";raw=raw.trim();
+  if(!raw){var ps=$("parseStatus");if(ps)ps.textContent="テキストが入力されていません。";return;}
+  var hit=0;
+  function setVal(id,val){var el=$(id);if(el&&val){el.value=val;hit++;}}
+  function m(pat){return raw.match(pat);}
+  var nM=m(/(?:氏名|利用者名?)[：:]\s*([^\n　,、。：:\d]{2,12})/);if(nM)setVal("name",nM[1].trim().replace(/\s+$/,""));
+  if(/女性|（女）/.test(raw))setVal("sex","女");else if(/男性|（男）/.test(raw))setVal("sex","男");
+  var bM=m(/生年月日?[：:]\s*((?:明治|大正|昭和|平成|令和)\d+年\d+月\d+日)/);if(bM)setVal("birth",bM[1]);
+  for(var ci=0;ci<CARE_OPTS.length;ci++){if(raw.includes(CARE_OPTS[ci])){setVal("care",CARE_OPTS[ci]);break;}}
+  var dM=m(/(?:疾患名?|病名|主要因|傷病名)[：:]\s*([^\n。,、]{2,40})/);if(dM)setVal("disease",dM[1].trim());
+  var cM=m(/(?:合併症?|既往歴?)[：:]\s*([^\n。,、]{2,40})/);if(cM)setVal("comorbid",cM[1].trim());
+  var wM=m(/(?:本人.{0,4}希望|本人.{0,4}意向|ご本人.{0,4}希望)[：:]\s*([^\n]{4,80})/);if(wM)setVal("wish_self",wM[1].trim());
+  var wfM=m(/(?:家族.{0,4}希望|家族.{0,4}意向)[：:]\s*([^\n]{4,80})/);if(wfM)setVal("wish_family",wfM[1].trim());
+  var sM=m(/(?:社会参加|参加状況|役割)[：:]\s*([^\n]{4,80})/);if(sM)setVal("social",sM[1].trim());
+  var hM=m(/(?:居宅|住居|住環境)[：:]\s*([^\n]{4,80})/);if(hM)setVal("home",hM[1].trim());
+  var crM=m(/(?:治療経過|経過)[：:]\s*([^\n]{4,100})/);if(crM)setVal("course",crM[1].trim());
+  var caM=m(/(?:留意事項|注意事項|禁忌)[：:]\s*([^\n]{4,80})/);if(caM)setVal("caution",caM[1].trim());
+  for(var gk in GAIT_MAP){if(GAIT_MAP[gk].some(function(k){return raw.includes(k);})){setVal("gait",gk);break;}}
+  for(var ak in ADL_KW){if(ADL_KW[ak].some(function(k){return raw.includes(k);})){var cb=document.querySelector("#adlChecks label.chip input[value='"+ak+"']");if(cb&&!cb.checked){cb.checked=true;cb.parentElement.classList.add("on");hit++;}}}
+  var ps=$("parseStatus");
+  if(ps)ps.textContent=hit>0?"✅ "+hit+"項目を読み込みました。認識できなかった項目は手入力で補ってください。":"❌ キーワードが見つかりませんでした。「氏名：」「病名：」のようにラベルの後にコロンを付けると認識しやすくなります。";
+  if(hit>0)startTimer();
+}
+
+
+
+/* ====== AI生成 ====== */
+let lastData = null;
+let attachments = []; // {name, mediaType, data(base64), kind:'image'|'document', size}
+
+function addFiles(fileList){
+  [...fileList].forEach(f=>{
+    const isPdf = f.type==="application/pdf" || /\.pdf$/i.test(f.name);
+    const okImg = /^image\/(png|jpeg|gif|webp)$/.test(f.type);
+    if(!isPdf && !okImg){
+      setStatus(`「${f.name}」は対応していない形式です（JPEG・PNG・PDF等を使用してください）。`, true);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const b64 = String(reader.result).split(",")[1] || "";
+      attachments.push({
+        name:f.name, size:f.size,
+        mediaType: isPdf ? "application/pdf" : f.type,
+        data:b64, kind: isPdf ? "document" : "image"
+      });
+      renderFiles();
+    };
+    reader.onerror = ()=> setStatus(`「${f.name}」の読み込みに失敗しました。`, true);
+    reader.readAsDataURL(f);
+  });
+}
+
+function renderFiles(){
+  const box = $("fileList"); box.innerHTML="";
+  let total = 0;
+  attachments.forEach((a,idx)=>{
+    total += a.size||0;
+    const row = document.createElement("div");
+    row.style.cssText="display:flex;align-items:center;gap:10px;border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;background:#fbfdfc;";
+    row.innerHTML =
+      `<span style="font-size:1.1rem;">${a.kind==="document"?"📄":"🖼️"}</span>
+       <span style="flex:1;font-size:.86rem;word-break:break-all;">${esc(a.name)} <span style="color:var(--muted);">(${(a.size/1024/1024).toFixed(2)}MB)</span></span>
+       <button data-del="${idx}" style="border:none;background:#f3dada;color:#b3261e;border-radius:8px;padding:4px 10px;cursor:pointer;font-weight:700;">削除</button>`;
+    box.appendChild(row);
+  });
+  box.querySelectorAll("[data-del]").forEach(b=>{
+    b.addEventListener("click",()=>{ attachments.splice(+b.dataset.del,1); renderFiles(); });
+  });
+  if(total > 18*1024*1024){
+    const warn = document.createElement("div");
+    warn.style.cssText="font-size:.8rem;color:#b3261e;font-weight:700;margin-top:4px;";
+    warn.textContent="⚠ 添付の合計サイズが大きすぎます。枚数を減らすか、解像度を下げてください。";
+    box.appendChild(warn);
+  }
+}
+
+function collectInput(){
+  return {
+    氏名:v("name"), 性別:v("sex"), 生年月日:v("birth"), 要介護度:v("care"),
+    障害高齢者自立度:v("adl_auto"), 認知症自立度:v("dem_auto"),
+    本人の希望:v("wish_self"), 家族の希望:v("wish_family"),
+    社会参加の状況:v("social"), 居宅の環境:v("home"),
+    病名:v("disease"), 合併疾患:v("comorbid"), 治療経過:v("course"),
+    実施上の留意事項:v("caution"),
+    困っている動作:checked("adlChecks"), 興味関心:checked("interestChecks"),
+    歩行の状況:v("gait"), 主な実施者:v("provider"), 特記:v("extra")
+  };
+}
+
+/* ====== 疾患別テンプレートDB ====== */
+const PLAN_DB = [
+{id:"knee",kw:["膝","TKA","人工膝","膝関節"],
+ lt:{f:"下肢筋力と膝関節可動域を改善し、荷重時の安定性を向上させる",a:"屋内外を安全に移動でき、段差の昇降が可能になる",p:"WISH"},
+ st:{f:"膝周囲筋の筋力を維持・向上し、立位を10分保持できる",a:"見守りで段差昇降ができる",p:"WISH_SHORT"},
+ pg:[{c:"立位の安定のため、平行棒内での起立・着座訓練を行う",n:"膝に過度な負荷をかけない。疼痛時は中止",fr:"週2回",t:"15"},
+     {c:"歩行の安定のため、段差・不整地を想定した応用歩行訓練を行う",n:"ふらつき時はすぐ支える。血圧変動に注意",fr:"週2回",t:"20"},
+     {c:"日常動作の自立のため、しゃがみ・立ち上がり動作の反復訓練を行う",n:"膝の痛みが出たら中止",fr:"週1回",t:"10"}],
+ hm:"椅子からの立ち座りを1日2回各10回行ってください。手すりや安定した台を使うと安全です。",
+ mo:"連続歩行距離（m）\n膝関節の疼痛の有無と程度\n段差昇降の可否と安定性\nトイレ動作・入浴動作の自立度",
+ fs:"変形性膝関節症による膝の痛みと筋力低下で、歩行や立ち座りに不安が生じている",
+ cmn:"【変形性膝関節症】膝関節の機能低下（心身機能）が歩行・段差昇降の制限（活動制約）につながり、外出・社会参加の機会が減少しています（参加制約）。"},
+{id:"femur",kw:["大腿骨","骨頭","転子"],
+ lt:{f:"股関節周囲筋力と荷重バランスを高め、骨折部の安定性を確保する",a:"杖歩行で屋内外を安全に移動でき、外出が可能になる",p:"WISH"},
+ st:{f:"患側下肢の荷重力を高め、立位保持を安定させる",a:"見守りで屋内歩行が自立する",p:"WISH_SHORT"},
+ pg:[{c:"荷重力の向上のため、平行棒内での荷重移動訓練を行う",n:"脱臼肢位を避ける（過度な内転・内旋・屈曲）",fr:"週2回",t:"15"},
+     {c:"歩行の安定のため、歩行器・杖を用いた歩行訓練を行う",n:"転倒に注意。痛みが強い日は負荷を軽減",fr:"週2回",t:"20"},
+     {c:"生活動作の回復のため、椅子座位での上肢・体幹の体操を行う",n:"座位バランスに注意",fr:"毎回",t:"10"}],
+ hm:"椅子に座っての足踏み運動を1日2回各20回行ってください。転倒に注意し、必ず安定した椅子で行ってください。",
+ mo:"連続歩行距離（m）と使用している歩行補助具の種類\n患側の荷重時痛の有無\n移乗動作の自立度\n外出回数（週あたり）",
+ fs:"大腿骨骨折の手術後、体重をかけることや歩行に慎重さが必要な",
+ cmn:"【大腿骨骨折術後】術後の筋力・荷重力の低下（心身機能）が歩行・日常動作の制限（活動制約）につながり、自宅内外での生活役割の縮小（参加制約）を招いています。"},
+{id:"stroke",kw:["脳梗塞","脳出血","片麻痺","半身","脳卒中"],
+ lt:{f:"麻痺側の筋力と協調性を高め、非麻痺側の代償能力を維持する",a:"装具・杖を用いて安全に移動でき、日常生活動作の自立度を高める",p:"WISH"},
+ st:{f:"麻痺側上下肢の随意運動を促し、座位・立位バランスを向上させる",a:"移乗動作を見守りで行える",p:"WISH_SHORT"},
+ pg:[{c:"立位バランスの向上のため、平行棒内での重心移動訓練を行う",n:"麻痺側を保護。血圧変動に注意",fr:"週2回",t:"15"},
+     {c:"歩行能力の維持・向上のため、装具・杖を用いた歩行訓練を行う",n:"ふらつき・つまずきに注意。段差は職員が付き添う",fr:"週2回",t:"20"},
+     {c:"上肢機能の改善のため、麻痺側を含む両手動作の訓練を行う",n:"肩の痛みに注意。無理な可動域訓練は避ける",fr:"週1回",t:"15"}],
+ hm:"健側の手すり把持で立ち座りを1日10回行ってください。麻痺側の指の開閉運動を50回、継続してください。",
+ mo:"歩行距離と歩行速度の変化\n麻痺側の握力・関節可動域\n移乗・トイレ動作の自立度\n1週間の活動量・外出回数",
+ fs:"脳卒中の影響で体に麻痺が残り、移動や日常動作に介助や見守りが必要な",
+ cmn:"【脳卒中後遺症】麻痺・バランス障害（心身機能）が移動・ADLの制限（活動制約）につながり、社会参加の大幅な縮小（参加制約）を招いています。"},
+{id:"parkinson",kw:["パーキンソン","すくみ足","振戦"],
+ lt:{f:"体幹の柔軟性と姿勢制御を維持し、すくみ足・突進歩行を軽減する",a:"転倒なく屋内移動ができ、日常動作を安全に行える",p:"WISH"},
+ st:{f:"姿勢反射を促し、方向転換時のバランスを改善する",a:"見守りで屋内移動が安定する",p:"WISH_SHORT"},
+ pg:[{c:"姿勢の維持のため、座位・立位での体幹回旋ストレッチを行う",n:"オン・オフの変動に配慮。オフ時は無理をさせない",fr:"毎回",t:"10"},
+     {c:"歩行の安定のため、リズムに合わせた歩行訓練（外的キュー）を行う",n:"すくみ足が出たら一度止まり再スタート",fr:"週2回",t:"20"},
+     {c:"転倒予防のため、バランスボードを用いた重心移動訓練を行う",n:"転倒リスク高い。常に手が届く位置で見守り",fr:"週1回",t:"15"}],
+ hm:"大きな声での発声練習を毎日5分行ってください。椅子座位での足踏みを朝夕各20回、続けてください。",
+ mo:"すくみ足の頻度と持続時間\n転倒回数（月あたり）\n方向転換時の安定性\n日常動作（着替え・食事）の所要時間",
+ fs:"パーキンソン病の影響で体の動きが緩慢になり、すくみ足や転倒のリスクが高い",
+ cmn:"【パーキンソン病】姿勢反射障害・すくみ足（心身機能）が移動の不安定化と転倒リスクの上昇（活動制約）につながり、屋外活動・外出の大幅な減少（参加制約）を招いています。"},
+{id:"dementia",kw:["認知症","アルツハイマー","レビー","前頭側頭","見当識"],
+ lt:{f:"残存する身体機能を維持し、活動性の低下を防ぐ",a:"声かけや見守りで日常動作を継続できる",p:"WISH"},
+ st:{f:"定期的な運動で筋力・持久力の低下を予防する",a:"促しにより食事・整容を自分で行える",p:"WISH_SHORT"},
+ pg:[{c:"活動性の維持のため、なじみの音楽に合わせた集団体操を行う",n:"指示理解に配慮。簡単な動作を繰り返す形式で",fr:"毎回",t:"15"},
+     {c:"下肢筋力の維持のため、椅子からの立ち座り訓練を行う",n:"転倒に注意。声かけで安心感を与える",fr:"週2回",t:"10"},
+     {c:"社会性の維持のため、手工芸や園芸など興味のある活動を取り入れる",n:"成功体験を重視。失敗を指摘しない",fr:"週1回",t:"20"}],
+ hm:"ご家族と一緒に散歩を1日10〜15分行ってください。簡単な家事（食器拭き等）への参加も、本人のペースで促してください。",
+ mo:"日常動作（食事・整容・排泄）の自立度の変化\n行動・心理症状（BPSD）の頻度や種類\n活動への参加意欲・表情の明るさ\n歩行の安定性",
+ fs:"認知症の影響で日々の行動に見守りや声かけが必要となり、活動の範囲が狭まっている",
+ cmn:"【認知症】認知機能低下（心身機能）が日常生活動作の低下（活動制約）につながり、社会的役割・生活の楽しみの縮小（参加制約）を招いています。"},
+{id:"disuse",kw:["廃用","フレイル","サルコペニア","不活発","低栄養","活動量低下"],
+ lt:{f:"全身の筋力・持久力を回復し、活動量を増やす",a:"屋内の移動と基本的な日常動作が自立する",p:"WISH"},
+ st:{f:"起居動作と立位保持の安定性を高める",a:"見守りで歩行・トイレ動作が行える",p:"WISH_SHORT"},
+ pg:[{c:"筋力回復のため、椅子座位での下肢の筋力トレーニングを行う",n:"疲労に注意。少量から段階的に負荷を上げる",fr:"週2回",t:"15"},
+     {c:"持久力の向上のため、歩行距離を段階的に延長する訓練を行う",n:"息切れ・動悸があれば休憩",fr:"週2回",t:"20"},
+     {c:"生活動作の回復のため、起き上がり・立ち上がり動作の練習を行う",n:"起立性低血圧に注意。ゆっくり動作する",fr:"毎回",t:"10"}],
+ hm:"テレビを見ながらの足踏みを1日2回各5分行ってください。こまめに立ち上がる習慣をつけることも大切です。",
+ mo:"連続歩行距離（m）\n起き上がり・立ち上がりの自立度\n食事摂取量と体重の推移\n1日の活動時間・離床時間",
+ fs:"体を動かす機会が減ったことで筋力や体力が低下し、日常動作に不安が出てきた",
+ cmn:"【廃用症候群・フレイル】全身の筋力・体力低下（心身機能）が基本動作・日常生活動作の制限（活動制約）につながり、外出・社会参加の機会の喪失（参加制約）を招いています。"},
+{id:"lumbar",kw:["腰椎","脊柱管","狭窄","圧迫骨折","腰痛","間欠性跛行"],
+ lt:{f:"体幹の支持力を高め、腰部への負担を軽減する",a:"痛みを管理しながら日常の移動と家事が行える",p:"WISH"},
+ st:{f:"体幹の筋力と柔軟性を維持し、疼痛を軽減する",a:"休憩を挟みながら連続歩行距離を延ばす",p:"WISH_SHORT"},
+ pg:[{c:"腰部の安定のため、腹筋・背筋の等尺性トレーニングを行う",n:"前屈動作を避ける（圧迫骨折時）。痛みの範囲内で",fr:"週2回",t:"15"},
+     {c:"歩行持久力の改善のため、平地歩行訓練を休憩を挟みつつ行う",n:"間欠性跛行の出現を観察。痛みが出たら休憩",fr:"週2回",t:"20"},
+     {c:"柔軟性の維持のため、椅子座位での下肢・体幹のストレッチを行う",n:"反動をつけず静的に伸ばす",fr:"毎回",t:"10"}],
+ hm:"仰向けでの膝抱えストレッチを朝晩各3回行ってください。長時間同じ姿勢を避け、こまめに体を動かしてください。",
+ mo:"連続歩行距離と疼痛の出現タイミング\n腰部の疼痛の程度（0〜10点）\n日常動作（家事・買い物）の遂行状況\n体幹筋力の変化",
+ fs:"腰の疾患による痛みやしびれで、歩行や立ち仕事に制限が生じている",
+ cmn:"【腰部疾患】疼痛・間欠性跛行（心身機能）が歩行・生活行為の制限（活動制約）につながり、外出・趣味活動の縮小（参加制約）を招いています。"},
+{id:"heart",kw:["心不全","心疾患","心房細動","狭心","心筋","NYHA"],
+ lt:{f:"心肺持久力を安全に維持し、運動耐容能を高める",a:"息切れなく屋内移動と日常動作が行える",p:"WISH"},
+ st:{f:"低強度の運動を継続し、体力の低下を防ぐ",a:"動悸・息切れなく入浴・着替えが行える",p:"WISH_SHORT"},
+ pg:[{c:"心肺機能の維持のため、座位での軽い有酸素運動（ペダル漕ぎ等）を行う",n:"Borg指数11〜13以内で実施。動悸・息切れ時は即中止",fr:"週2回",t:"15"},
+     {c:"日常動作の維持のため、エネルギー節約動作の指導と練習を行う",n:"立ち上がりはゆっくり。入浴動作は特に注意",fr:"週1回",t:"15"},
+     {c:"下肢筋力の維持のため、椅子座位での低負荷な筋力訓練を行う",n:"息を止めない（バルサルバ禁止）。脈拍を確認",fr:"週2回",t:"10"}],
+ hm:"散歩を1日10〜15分、息切れが出ない速さで行ってください。体重を毎日測定し、急な増加があればすぐにご連絡ください。",
+ mo:"運動時の脈拍・血圧の変動\n日常動作時の息切れの程度\n体重の変動（浮腫の有無）\n連続歩行距離と疲労感",
+ fs:"心臓の病気の影響で息切れや動悸が起こりやすく、活動に慎重さが必要な",
+ cmn:"【心疾患】運動耐容能の低下・息切れ（心身機能）が日常動作・活動量の制限（活動制約）につながり、外出・社会参加の縮小（参加制約）を招いています。"},
+{id:"resp",kw:["COPD","肺","呼吸","在宅酸素","SpO2","喘息"],
+ lt:{f:"呼吸機能を維持し、息切れを軽減して活動量を増やす",a:"呼吸法を活用しながら日常動作を行える",p:"WISH"},
+ st:{f:"腹式呼吸と口すぼめ呼吸を習得し、運動時の呼吸困難を軽減する",a:"休憩を活用しながら入浴・着替えが行える",p:"WISH_SHORT"},
+ pg:[{c:"呼吸機能の改善のため、呼吸リハ（腹式呼吸・口すぼめ呼吸）を指導する",n:"SpO2を確認。90%以下で中止。在宅酸素使用者は流量を遵守",fr:"毎回",t:"10"},
+     {c:"持久力の向上のため、平地歩行訓練を呼吸法を併用しながら行う",n:"息切れが強い日は負荷を軽減。無理をさせない",fr:"週2回",t:"15"},
+     {c:"上肢機能の維持のため、軽い重錘を用いた上肢の筋力訓練を行う",n:"息を止めずに行う。呼気時に力を入れる",fr:"週1回",t:"10"}],
+ hm:"口すぼめ呼吸を1日5回練習してください。入浴の前後には必ず休憩を取り、急いで動かないようにしてください。",
+ mo:"SpO2の安静時・運動時の値\n息切れの程度（修正Borgスケール）\n連続歩行距離\n日常動作（入浴・外出）の遂行状況",
+ fs:"肺の病気で息切れが生じやすく、日常動作や外出に慎重さが必要な",
+ cmn:"【呼吸器疾患】息切れ・呼吸困難（心身機能）が歩行・日常動作の制限（活動制約）につながり、外出・趣味活動の縮小（参加制約）を招いています。"},
+{id:"ra",kw:["リウマチ","関節炎","RA","拘縮"],
+ lt:{f:"関節の可動域を維持し、疼痛を管理しながら筋力の低下を防ぐ",a:"関節保護の方法を用いて日常動作を継続できる",p:"WISH"},
+ st:{f:"疼痛のコントロールと関節可動域の維持を図る",a:"自助具を活用して食事・整容が行える",p:"WISH_SHORT"},
+ pg:[{c:"関節可動域の維持のため、温熱後に愛護的な関節可動域訓練を行う",n:"関節保護の原則を厳守。腫脹・熱感がある関節は避ける",fr:"週2回",t:"15"},
+     {c:"筋力の維持のため、関節に負担のかからない等尺性筋力訓練を行う",n:"痛みが出たら中止。炎症期は安静を優先",fr:"週2回",t:"10"},
+     {c:"生活動作の維持のため、自助具の使い方と関節保護動作を指導する",n:"疲労を溜めない。午前の体調の良い時間帯に実施",fr:"週1回",t:"15"}],
+ hm:"朝の手指のこわばり体操を5分間行ってください。就寝前の関節の軽いストレッチも継続してください。",
+ mo:"関節の疼痛・腫脹の変化\n朝のこわばりの持続時間\n握力の変化\n日常動作（食事・整容・着替え）の自立度",
+ fs:"関節リウマチにより手指や関節に変形と痛みがあり、細かい動作や重いものを持つことに困難がある",
+ cmn:"【関節リウマチ】関節変形・疼痛（心身機能）が手指動作・歩行の制限（活動制約）につながり、趣味・社会的交流の縮小（参加制約）を招いています。"}
+];
+const DEFAULT_PLAN={id:"default",kw:[],
+ lt:{f:"全身の筋力・バランスを維持し、体力の低下を防ぐ",a:"安全に日常動作を行い、生活の自立を維持する",p:"WISH"},
+ st:{f:"基本的な運動習慣を身につけ、筋力を維持する",a:"日常動作を安定して行える",p:"WISH_SHORT"},
+ pg:[{c:"筋力維持のため、椅子座位での上下肢の筋力トレーニングを行う",n:"体調に配慮し無理のない範囲で",fr:"週2回",t:"15"},
+     {c:"バランスの維持のため、立位での重心移動訓練を行う",n:"転倒に注意。必ず手すりの近くで",fr:"週2回",t:"15"},
+     {c:"柔軟性の維持のため、全身のストレッチ体操を行う",n:"痛みのない範囲で。反動をつけない",fr:"毎回",t:"10"}],
+ hm:"自宅で1日1回の立ち座り運動を10回行ってください。短い散歩を10分程度、習慣にしてください。",
+ mo:"歩行の安定性\n日常動作の自立度\n運動への参加意欲\n体力・持久力の変化",
+ fs:"身体機能の低下により、日常動作や移動に不安が生じている",
+ cmn:"身体機能の低下（心身機能）が日常生活動作の制限（活動制約）につながり、外出・社会参加の機会の縮小（参加制約）を招いています。"
+};
+function matchCategory(disease){
+  if(!disease) return DEFAULT_PLAN;
+  const d = disease.toLowerCase();
+  for(const t of PLAN_DB){ if(t.kw.some(k=> d.includes(k))) return t; }
+  return DEFAULT_PLAN;
+}
+function buildPlanFromTemplate(info){
+  const cat = matchCategory(info.病名);
+  const wish = info.本人の希望 || "生活上の楽しみや役割を取り戻す";
+  const wishShort = wish.length > 20 ? wish.slice(0,20)+"に向けて取り組む" : wish + "に向けた準備をする";
+  const replace = s => s.replace("WISH_SHORT", wishShort).replace("WISH_ACT", wish).replace("WISH", wish);
+  const plan = {
+    long_term:{function:replace(cat.lt.f),activity:replace(cat.lt.a),participation:replace(cat.lt.p)},
+    short_term:{function:replace(cat.st.f),activity:replace(cat.st.a),participation:replace(cat.st.p)},
+    programs:cat.pg.map(p=>({content:p.c,caution:info.実施上の留意事項||p.n,frequency:p.fr,time:p.t,provider:info.主な実施者||"機能訓練指導員"})),
+    home_exercise:cat.hm, special_notes:info.特記||"特になし", monitoring:cat.mo, aim:"", family_explanation:""
+  };
+  const adl=info.困っている動作||[];
+  if(adl.includes("トイレ動作")&&!plan.short_term.activity.includes("トイレ")) plan.short_term.activity+="。トイレ動作の自立度を高める";
+  if(adl.includes("入浴")&&!plan.programs.some(p=>p.content.includes("入浴"))) plan.programs.push({content:"入浴動作の自立のため、浴室内での立ち座り・またぎ動作の練習を行う",caution:"滑りに注意。血圧変動に配慮",frequency:"週1回",time:"10",provider:info.主な実施者||"機能訓練指導員"});
+  const nm=info.氏名||"ご利用者";
+  const wishText=wish!=="生活上の楽しみや役割を取り戻す"?"「"+wish+"」":"生活の自立";
+  plan.aim=cat.cmn+"\nICFの視点から、【心身機能】"+plan.long_term.function+"を基盤に、【活動】"+plan.long_term.activity+"の実現を通じて、【参加】"+plan.long_term.participation+"につなげる計画です。\n3か月後の再評価で進捗を確認します。ケアプランとの整合性や変化があればご連絡いたします。";
+  const prog1=plan.programs[0]?plan.programs[0].content.split("のため")[0]+"の練習":"筋力訓練";
+  const prog2=plan.programs[1]?plan.programs[1].content.split("のため")[0]+"の訓練":"バランス訓練";
+  const stAct=plan.short_term.activity.split("。")[0];
+  plan.family_explanation=nm+"様は現在、"+cat.fs+"状態です。\nデイサービスでは、"+prog1+"や"+prog2+"などに週2〜3回取り組んでいます。"+nm+"様の状態に合わせた安全なメニューで、担当スタッフが毎回見守りながら行います。\n目標は、"+wishText+"ことです。まず3か月で「"+stAct+"」を目指しています。\nご家庭では、"+cat.hm+"\n体調の変化や気になることがあれば、いつでもスタッフにお声がけください。一緒に目標を目指してまいります。";
+  return plan;
+}
+
+async function generate(){
+  if(!v("name")){ setStatus("利用者氏名を入力してください。", true); return; }
+  setBusy(true);
+  setStatus("計画を作成しています…");
+  try{
+    const info = collectInput();
+    const plan = buildPlanFromTemplate(info);
+    fillResult(plan);
+    var elapsed=stopTimer();
+    var tlbl=$("timerLabel");if(tlbl)tlbl.textContent="入力時間："+elapsed+"（完了）";
+    lastData={info:info,plan:plan,elapsed:elapsed};
+    setStatus("作成しました。内容を確認・修正してWord出力してください。");
+    $("resultCard").classList.remove("hidden");
+    $("resultCard").scrollIntoView({behavior:"smooth"});
+  }catch(e){
+    console.error(e);
+    setStatus("計画作成中にエラーが発生しました：" + (e.message||""), true);
+  }finally{
+    setBusy(false);
+  }
+}
+
+
+function fillResult(p){
+  $("lt_func").value = p.long_term?.function || "";
+  $("lt_act").value  = p.long_term?.activity || "";
+  $("lt_part").value = p.long_term?.participation || "";
+  $("st_func").value = p.short_term?.function || "";
+  $("st_act").value  = p.short_term?.activity || "";
+  $("st_part").value = p.short_term?.participation || "";
+  const box = $("programs"); box.innerHTML="";
+  (p.programs||[]).forEach((pr,i)=>{
+    const d=document.createElement("div"); d.className="prog";
+    d.innerHTML=
+     `<div class="pt">プログラム ${i+1}</div>
+      <div class="field" style="margin-bottom:8px;"><label>プログラム内容</label><textarea data-k="content">${esc(pr.content)}</textarea></div>
+      <div class="field" style="margin-bottom:8px;"><label>留意点</label><textarea data-k="caution">${esc(pr.caution)}</textarea></div>
+      <div class="grid">
+        <div class="field"><label>頻度</label><input data-k="frequency" value="${esc(pr.frequency)}"></div>
+        <div class="field"><label>時間（分）</label><input data-k="time" value="${esc(pr.time)}"></div>
+        <div class="field full"><label>主な実施者</label><input data-k="provider" value="${esc(pr.provider)}"></div>
+      </div>`;
+    box.appendChild(d);
+  });
+  $("home_ex").value = p.home_exercise || "";
+  $("special").value = p.special_notes || "";
+  $("aim").value = p.aim || "";
+  $("monitoring").value = p.monitoring || "";
+  $("family_exp").value = p.family_explanation || "";
+}
+function esc(s){return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+
+function readPrograms(){
+  return [...document.querySelectorAll("#programs .prog")].map(d=>{
+    const o={};d.querySelectorAll("[data-k]").forEach(el=>o[el.dataset.k]=el.value.trim());return o;
+  });
+}
+
+/* ====== Word出力 ====== */
+function buildWord(){
+  const info = collectInput();
+  const programs = readPrograms();
+  const progRows = programs.map((p,i)=>`
+    <tr><td class="lbl">プログラム${i+1}<br>内容</td><td colspan="3">${nl(p.content)}</td></tr>
+    <tr><td class="lbl">留意点</td><td colspan="3">${nl(p.caution)}</td></tr>
+    <tr><td class="lbl">頻度</td><td>${esc(p.frequency)}</td><td class="lbl">時間</td><td>${esc(p.time)} 分</td></tr>
+    <tr><td class="lbl">主な実施者</td><td colspan="3">${esc(p.provider)}</td></tr>
+  `).join('<tr><td colspan="4" style="height:4px;border:none;background:#fff;"></td></tr>');
+
+  const html =
+`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8">
+<style>
+@page{size:A4 portrait;margin:1.4cm;}
+body{font-family:"BIZ UDPGothic","MS PGothic",sans-serif;font-size:10.5pt;color:#000;}
+h1{font-size:14pt;text-align:center;margin:0 0 4px;}
+.sub{text-align:center;font-size:9pt;color:#333;margin:0 0 10px;}
+table{border-collapse:collapse;width:100%;margin-bottom:10px;}
+td{border:1px solid #333;padding:5px 7px;vertical-align:top;font-size:10pt;}
+.lbl{background:#e3f0ef;font-weight:bold;width:20%;white-space:nowrap;}
+.sec{background:#0e6b6b;color:#fff;font-weight:bold;padding:5px 8px;font-size:10.5pt;}
+.foot{font-size:8.5pt;color:#555;margin-top:6px;}
+</style></head><body>
+<h1>個別機能訓練計画書</h1>
+<p class="sub">（別紙様式3-3）　通所介護　令和6年度改定対応</p>
+
+<table>
+<tr><td class="lbl">事業所名</td><td colspan="3">${esc(v("office"))}</td></tr>
+<tr><td class="lbl">作成日</td><td>${esc(v("cdate"))}</td><td class="lbl">初回作成日</td><td>${esc(v("fdate"))}</td></tr>
+<tr><td class="lbl">計画作成者・職種</td><td colspan="3">${esc(v("author"))}</td></tr>
+<tr><td class="lbl">氏名</td><td>${esc(info.氏名)}</td><td class="lbl">性別</td><td>${esc(info.性別)}</td></tr>
+<tr><td class="lbl">生年月日</td><td>${esc(info.生年月日)}</td><td class="lbl">要介護度</td><td>${esc(info.要介護度)}</td></tr>
+<tr><td class="lbl">障害高齢者の<br>日常生活自立度</td><td>${esc(info.障害高齢者自立度)}</td><td class="lbl">認知症高齢者の<br>日常生活自立度</td><td>${esc(info.認知症自立度)}</td></tr>
+</table>
+
+<div class="sec">Ⅰ　利用者の基本情報</div>
+<table>
+<tr><td class="lbl">本人の希望</td><td colspan="3">${nl(info.本人の希望)}</td></tr>
+<tr><td class="lbl">家族の希望</td><td colspan="3">${nl(info.家族の希望)}</td></tr>
+<tr><td class="lbl">本人の社会参加の状況</td><td colspan="3">${nl(info.社会参加の状況)}</td></tr>
+<tr><td class="lbl">居宅の環境</td><td colspan="3">${nl(info.居宅の環境)}</td></tr>
+<tr><td class="lbl">歩行の状況</td><td colspan="3">${esc(info.歩行の状況)}</td></tr>
+</table>
+
+<div class="sec">健康状態・経過</div>
+<table>
+<tr><td class="lbl">病名</td><td colspan="3">${nl(info.病名)}</td></tr>
+<tr><td class="lbl">治療経過</td><td colspan="3">${nl(info.治療経過)}</td></tr>
+<tr><td class="lbl">合併疾患・<br>コントロール状態</td><td colspan="3">${nl(info.合併疾患)}</td></tr>
+<tr><td class="lbl">機能訓練実施上の<br>留意事項</td><td colspan="3">${nl(v("caution"))}</td></tr>
+</table>
+
+<div class="sec">個別機能訓練の目標</div>
+<table>
+<tr><td class="lbl" style="background:#0e6b6b;color:#fff;"></td><td class="lbl">心身機能</td><td class="lbl">活動</td><td class="lbl">参加</td></tr>
+<tr><td class="lbl">長期目標<br>（約6か月）</td><td>${nl(v("lt_func"))}</td><td>${nl(v("lt_act"))}</td><td>${nl(v("lt_part"))}</td></tr>
+<tr><td class="lbl">短期目標<br>（約3か月）</td><td>${nl(v("st_func"))}</td><td>${nl(v("st_act"))}</td><td>${nl(v("st_part"))}</td></tr>
+</table>
+
+<table>
+<tr><td class="lbl">目標設定のねらい・根拠</td><td>${nl(v("aim"))}</td></tr>
+</table>
+
+<div class="sec">個別機能訓練項目（プログラム）</div>
+<table>${progRows}</table>
+
+<table>
+<tr><td class="lbl">利用時間以外に本人・<br>家族等が実施すること</td><td colspan="3">${nl(v("home_ex"))}</td></tr>
+<tr><td class="lbl">特記事項</td><td colspan="3">${nl(v("special"))}</td></tr>
+</table>
+
+<div class="sec">3か月後の確認ポイント（モニタリング指標）</div>
+<table>
+<tr><td>${nl(v("monitoring"))}</td></tr>
+</table>
+
+<div class="sec">個別機能訓練実施後の対応（3か月ごとに記載）</div>
+<table>
+<tr><td class="lbl">実施による変化</td><td colspan="3" style="height:50px;"></td></tr>
+<tr><td class="lbl">課題とその要因</td><td colspan="3" style="height:50px;"></td></tr>
+</table>
+
+<p class="foot">※本計画書はテンプレートをもとに作成されています。内容は機能訓練指導員が確認・修正のうえ、利用者・家族へ説明し同意を得てください。担当ケアマネジャーへの交付・報告が必要です。</p>
+<p class="foot">作成日時：${new Date().toLocaleString("ja-JP")}　入力・作成所要時間：${lastData&&lastData.elapsed?lastData.elapsed:"未計測"}</p>
+
+<div style="page-break-before:always;"></div>
+<h1>ご本人・ご家族へのご説明</h1>
+<p class="sub">個別機能訓練の内容について</p>
+<table>
+<tr><td class="lbl">利用者氏名</td><td>${esc(info.氏名)} 様</td></tr>
+</table>
+<table>
+<tr><td style="line-height:1.9;padding:12px 14px;">${nl(v("family_exp"))}</td></tr>
+</table>
+<table>
+<tr><td class="lbl" style="width:55%;">上記の内容について説明を受け、同意します。</td><td>説明日：　　年　　月　　日</td></tr>
+<tr><td>ご署名：　　　　　　　　　　　　　　</td><td>続柄：　　　　　　　</td></tr>
+</table>
+<p class="foot">※本様式はご家族説明・同意用の別紙です。計画書本紙とあわせて保管してください。</p>
+</body></html>`;
+  return html;
+}
+function nl(s){return esc(s).replace(/\n/g,"<br>");}
+
+function downloadWord(){
+  // 目標が空ならブロック
+  if(!v("lt_func") && !v("st_func")){ setStatus("先に計画を自動作成してください。", true); return; }
+  const html = buildWord();
+  const blob = new Blob(['\ufeff'+html], {type:"application/msword"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const nm = (v("name")||"利用者").replace(/\s/g,"");
+  a.href=url; a.download=`個別機能訓練計画書_${nm}.doc`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  setStatus("Wordファイルをダウンロードしました。");
+}
+
+/* ====== UI制御 ====== */
+function setBusy(b){
+  const btn=$("genBtn");
+  btn.disabled=b;
+  $("genLabel").innerHTML = b ? '<span class="spinner"></span> 作成中…' : '計画を自動作成';
+  if(b) $("genLabel").style.display="inline-flex";
+}
+function setStatus(msg,err){
+  const s=$("status"); s.textContent=msg; s.className="status"+(err?" err":"");
+}
+function on(id,evt,fn){ var el=$(id); if(el) el.addEventListener(evt,fn); }
+on("genBtn","click",generate);
+on("regenBtn","click",generate);
+on("wordBtn","click",downloadWord);
+on("files","change",function(e){ addFiles(e.target.files); e.target.value=""; });
+on("parseBtn","click",parseBulk);
+on("clearPasteBtn","click",function(){ var bp=$("bulkPaste"); if(bp) bp.value=""; var ps=$("parseStatus"); if(ps) ps.textContent=""; });
+on("clearBtn","click",async function(){
+  if(!confirm("入力内容をすべて消去しますか？")) return;
+  FIELDS.forEach(f=>{ if($(f)) $(f).value=""; });
+  document.querySelectorAll(".chip.on").forEach(l=>{l.classList.remove("on");l.querySelector("input").checked=false;});
+  attachments = []; renderFiles();
+  $("resultCard").classList.add("hidden");
+  setStatus("クリアしました。");
+  window.scrollTo({top:0,behavior:"smooth"});
+});
+</script>
+</body>
+</html>
